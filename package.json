@@ -10,9 +10,12 @@
     "build": "tsc -p tsconfig.json",
     "migrate": "node-pg-migrate",
     "start": "node dist/api.js",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "worker": "tsx watch src/worker.ts",
+    "enqueue": "tsx src/dev/enqueue-demo.ts"
   },
   "dependencies": {
+    "bullmq": "^6.3.16",
     "express": "^5.3.0",
     "ioredis": "^6.0.0",
     "pg": "^8.23.1",
