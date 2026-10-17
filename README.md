@@ -1,0 +1,1 @@
+- PostgreSQL 17 (node-postgres, hand-written SQL) with three schemas: app, audit, ops
