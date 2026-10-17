@@ -1,5 +1,4 @@
--- HookRelay schema. Design reference now; becomes migration 001 in Phase 3.
-
+-- Up Migration
 create schema if not exists app;
 create schema if not exists audit;
 create schema if not exists ops;
@@ -114,3 +113,8 @@ create table ops.job_runs (
 );
 
 alter database hookrelay set search_path = app, public;
+-- Down Migration
+alter database hookrelay reset search_path;
+drop schema if exists audit cascade;
+drop schema if exists ops cascade;
+drop schema if exists app cascade;
