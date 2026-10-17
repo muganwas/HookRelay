@@ -7,7 +7,7 @@ subscriptions, signs each request, and retries failures with backoff.
 
 - Node 24, TypeScript (strict, ESM)
 - Express 5
-- PostgreSQL 17 (node-postgres, hand-written SQL)
+- PostgreSQL 17 (node-postgres, hand-written SQL) — migrations via node-pg-migrate
 
 ## Run locally
 
