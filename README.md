@@ -89,9 +89,10 @@ Open **http://localhost:3000/labs** — a study guide covering every topic built
 this repo, with one-click demos that run against the real Postgres and Redis.
 
 - 14 topics, each with key ideas, runnable snippets and an interview drill
-- 31 one-click demos: constraint probes, migration drift, layer-rule scan, EventEmitter
+- 35 one-click demos: constraint probes, migration drift, layer-rule scan, EventEmitter
   semantics, queue retries and dedupe, cron claim race, index before/after, query
-  plans, log redaction and stream tail, audit writes, HMAC verification, ETag revalidation
+  plans, log redaction and stream tail, audit writes, API-key auth, rate limiting,
+  raw-body hashing, HMAC verification, ETag revalidation
 - Progress is stored in localStorage
 
 Some demos need the worker running in a second terminal (`npm run worker`).
