@@ -72,7 +72,7 @@ async function enqueueScenario(
       `jobId = deliveryId = ${job.id}`,
       workers === 0
         ? 'No worker connected: the job will sit in waiting. Start it with `npm run worker` in another terminal.'
-        : `${workers} worker(s) connected — watch the worker terminal for attempt logs.`,
+        : `${workers} worker(s) connected: watch the worker terminal for attempt logs.`,
       scenario === 'dead'
         ? 'This throws UnrecoverableError, so it should go dead on attempt 1 regardless of attempts=5.'
         : 'Backoff is exponential from 1s: 1s, 2s, 4s, 8s.',
@@ -100,7 +100,7 @@ async function queuesDedupe(): Promise<ActionResult> {
     return {
       title: waitingSecond === waitingFirst ? 'Second add was ignored' : 'Second add created a job',
       summary:
-        'This queue has no worker, so jobs stay in waiting — which makes the count deterministic instead of racing.',
+        'This queue has no worker, so jobs stay in waiting, which makes the count deterministic instead of racing.',
       table: {
         columns: ['Step', 'Returned jobId', 'Waiting count'],
         rows: [
@@ -129,7 +129,7 @@ async function queuesSnapshot(): Promise<ActionResult> {
 
   return {
     title: `${workers} worker(s) connected`,
-    summary: 'Job counts by state. Failed does not mean dead — check attemptsMade against attempts.',
+    summary: 'Job counts by state. Failed does not mean dead: check attemptsMade against attempts.',
     table: {
       columns: ['State', 'Count'],
       rows: Object.entries(counts).map(([state, count]) => [state, count]),
@@ -216,7 +216,7 @@ async function cronSchedulers(): Promise<ActionResult> {
     },
     notes: [
       'Patterns are six-field cron (seconds first): 0 0 6 * * * is 06:00 daily.',
-      'No schedulers listed? Start the worker once — it registers them at boot.',
+      'No schedulers listed? Start the worker once: it registers them at boot.',
     ],
     raw: schedulers,
   };
@@ -302,7 +302,7 @@ async function indexesSeed(input: unknown): Promise<ActionResult> {
     },
     notes: [
       'Seeding is idempotent: existing lab events are reused, and only events without a delivery get one.',
-      'Run "Measure before vs after" next — it drops the lab index first so the contrast is real.',
+      'Run "Measure before vs after" next: it drops the lab index first so the contrast is real.',
     ],
   };
 }
@@ -364,7 +364,7 @@ async function indexesBeforeAfter(input: unknown): Promise<ActionResult> {
     table: {
       columns: ['Phase', 'Scan node', 'Top node', 'Execution time', 'Index build'],
       rows: [
-        ['before index', before.scan || before.top, before.top, before.execution.replace('Execution Time: ', ''), '—'],
+        ['before index', before.scan || before.top, before.top, before.execution.replace('Execution Time: ', ''), 'n/a'],
         ['after index', after.scan || after.top, after.top, after.execution.replace('Execution Time: ', ''), `${createMs} ms`],
       ],
     },
@@ -372,7 +372,7 @@ async function indexesBeforeAfter(input: unknown): Promise<ActionResult> {
     notes: [
       scanNote,
       'A partial index only contains rows matching the predicate, so it is smaller and more likely to stay in cache.',
-      'The index is left in place afterwards — it is the index the worker actually needs.',
+      'The index is left in place afterwards: it is the index the worker actually needs.',
       'If both plans look identical, the table is too small: seed more rows.',
     ],
     raw: { before: beforeLines, after: afterLines },
@@ -524,7 +524,7 @@ async function plansExplain(): Promise<ActionResult> {
     sql: JOIN_QUERY,
     notes: [
       worst.ratio > 2 || (worst.ratio > 0 && worst.ratio < 0.5)
-        ? `Worst estimate error: ${worst.node} at ${worst.ratio}× — run ANALYZE on that table.`
+        ? `Worst estimate error: ${worst.node} at ${worst.ratio}×. Run ANALYZE on that table.`
         : 'Estimates look close to reality for these nodes.',
       'If this shows a Seq Scan on app.deliveries, run the indexes demo first to see the contrast.',
     ],
@@ -586,7 +586,7 @@ async function webhooksHmac(): Promise<ActionResult> {
   return {
     title: 'HMAC over timestamp + body',
     summary:
-      'Signature validity and freshness are two separate checks. A receiver must pass both — the row above shows a case where the HMAC is fine and the request is still rejected.',
+      'Signature validity and freshness are two separate checks. A receiver must pass both: the row above shows a case where the HMAC is fine and the request is still rejected.',
     table: {
       columns: ['Case', 'Accepted', 'Why'],
       rows,
@@ -609,7 +609,7 @@ type RawResponse = {
 /**
  * Uses node:http rather than fetch on purpose. Undici (Node's fetch) injects
  * `cache-control: no-cache` when a request carries If-None-Match, which makes a
- * correct server answer 200 instead of 304 — it defeats the thing being tested.
+ * correct server answer 200 instead of 304: it defeats the thing being tested.
  */
 function rawGet(url: string, headers: Record<string, string> = {}): Promise<RawResponse> {
   return new Promise((resolve, reject) => {
@@ -651,7 +651,7 @@ async function pollingEtag(input: unknown): Promise<ActionResult> {
     },
     notes: [
       'Node\u2019s fetch adds `cache-control: no-cache` whenever you send If-None-Match, so a correct server answers 200. That is why this demo uses node:http instead.',
-      'Express generates a weak ETag for JSON responses automatically — no code required.',
+      'Express generates a weak ETag for JSON responses automatically: no code required.',
       'A volatile field in the body (a timestamp) changes the ETag every request and makes caching impossible.',
       '304 still costs a round trip: if latency is the problem you need long-poll or push, not caching.',
     ],
@@ -668,7 +668,7 @@ export const runtimeActions: ActionDefinition[] = [
       enqueueScenario(
         'ok',
         `${selfBaseUrl}/labs/api/targets/200`,
-        'Expect success on attempt 1 — the worker really calls that URL.',
+        'Expect success on attempt 1: the worker really calls that URL.',
       ),
   },
   {

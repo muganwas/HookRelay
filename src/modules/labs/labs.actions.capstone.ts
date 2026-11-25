@@ -71,7 +71,7 @@ async function capstoneLoad(): Promise<ActionResult> {
   await pool.query(`delete from app.events where type = 'lab.load' and tenant_id = $1`, [DEMO_TENANT]);
 
   return {
-    title: `${LOAD_TOTAL} requests in ${Math.round(elapsedMs)} ms — ${Math.round((LOAD_TOTAL / elapsedMs) * 1000)} req/s`,
+    title: `${LOAD_TOTAL} requests in ${Math.round(elapsedMs)} ms: ${Math.round((LOAD_TOTAL / elapsedMs) * 1000)} req/s`,
     summary:
       'Every request went through auth, rate limiting, validation, a transaction with fan-out, and a Redis enqueue.',
     table: {
@@ -95,7 +95,7 @@ async function capstoneLoad(): Promise<ActionResult> {
       'p99 is the number to quote: it is the one users feel and the one an SLO is written against.',
       'Fan-out is included: each event also created a delivery row and a BullMQ job.',
       'Lab events were deleted afterwards, which cascaded their deliveries.',
-      'The limiter allows 60 events per minute per key — 200 requests from one key would normally 429 at that rate.',
+      'The limiter allows 60 events per minute per key: 200 requests from one key would normally 429 at that rate.',
     ],
   };
 }
@@ -140,7 +140,7 @@ async function capstonePool(): Promise<ActionResult> {
     return {
       title: `Pool max ${max}: the ${max + 1}th caller waited`,
       summary:
-        'A connection pool is a queue with a hard ceiling. When every slot is checked out, new work waits — including health checks.',
+        'A connection pool is a queue with a hard ceiling. When every slot is checked out, new work waits, including health checks.',
       table: {
         columns: ['Observation', 'Value'],
         rows: [
@@ -156,7 +156,7 @@ async function capstonePool(): Promise<ActionResult> {
       },
       notes: [
         'With N replicas each running max=10, the database sees N×10 connections. Postgres has its own max_connections ceiling.',
-        'This is why /v1/health borrowing from the main pool is dangerous: under saturation it hangs, Docker marks the container unhealthy, and the orchestrator restarts it — making things worse.',
+        'This is why /v1/health borrowing from the main pool is dangerous: under saturation it hangs, Docker marks the container unhealthy, and the orchestrator restarts it, making things worse.',
         'A separate small pool (or a direct query with its own timeout) is the usual fix for health checks.',
         'Every client here is released in a finally block; a leaked client is a permanent outage.',
       ],
@@ -196,10 +196,10 @@ async function capstoneRedisDown(): Promise<ActionResult> {
     table: {
       columns: ['Feature', 'Needs Redis', 'Behaviour when Redis is unreachable'],
       rows: [
-        ['GET /v1/deliveries/:id', 'no', 'unaffected — Postgres only'],
+        ['GET /v1/deliveries/:id', 'no', 'unaffected: Postgres only'],
         ['POST /v1/events', 'yes', 'fails: the event is committed but cannot be queued'],
-        ['rate limiter', 'yes', 'fails OPEN — the request proceeds unthrottled'],
-        ['request log stream', 'yes', 'fire-and-forget — the request still succeeds'],
+        ['rate limiter', 'yes', 'fails OPEN: the request proceeds unthrottled'],
+        ['request log stream', 'yes', 'fire-and-forget: the request still succeeds'],
         ['worker', 'yes', 'stops consuming; jobs resume when Redis returns'],
         ['cron schedulers', 'yes', 'missed windows; the claim table prevents double work later'],
       ],
@@ -249,14 +249,14 @@ async function capstoneSlowReceiver(): Promise<ActionResult> {
       rows: [
         ['POST /v1/events (enqueue)', `${Math.round(enqueueMs)} ms`],
         ['attempt 1 duration', `${attempts[0]?.durationMs ?? '?'} ms`],
-        ['attempt 1 status', attempts[0]?.responseStatus ?? '—'],
+        ['attempt 1 status', attempts[0]?.responseStatus ?? 'n/a'],
         ['delivery status', view?.status ?? 'unknown'],
         ['attempt count', attempts.length],
       ],
     },
     notes: [
       'The ratio is the whole point: the request path is decoupled from the receiver by the queue.',
-      'With worker concurrency 5, ten slow deliveries take about two rounds, not ten — bounded parallelism.',
+      'With worker concurrency 5, ten slow deliveries take about two rounds, not ten: bounded parallelism.',
       'A 10s timeout in the worker caps how long one slow receiver can hold a slot.',
       'Without a queue, this 2.5s would have been the HTTP response time, and one slow receiver would exhaust the server.',
     ],
@@ -292,7 +292,7 @@ async function capstoneReadout(): Promise<ActionResult> {
 
   if (pending > 0 && queueWaiting === 0) {
     notes.push(
-      `${pending} delivery(ies) are pending with nothing in the queue — those are stuck, not busy. This is the enqueue-after-commit gap: the row committed, the job never queued.`,
+      `${pending} delivery(ies) are pending with nothing in the queue: those are stuck, not busy. This is the enqueue-after-commit gap: the row committed, the job never queued.`,
     );
   }
 
@@ -300,7 +300,7 @@ async function capstoneReadout(): Promise<ActionResult> {
     'Workers connected = 0 means nothing will be delivered, no matter how healthy the API looks.',
     'Queue waiting climbing while active is flat means the workers cannot keep up.',
     'Deliveries stuck in retrying with attempts not increasing usually means the worker is down, not the receiver.',
-    'Table size that grows faster than row count is bloat — check autovacuum before blaming the disk.',
+    'Table size that grows faster than row count is bloat: check autovacuum before blaming the disk.',
   );
 
   return {

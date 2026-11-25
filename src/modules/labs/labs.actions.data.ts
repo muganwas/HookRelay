@@ -324,7 +324,7 @@ async function schemasConstraints(): Promise<ActionResult> {
   return {
     title: mismatches.length === 0 ? 'All 9 probes matched' : `${mismatches.length} mismatch(es)`,
     summary:
-      'Each case ran inside a savepoint, so a failure did not abort the transaction. Everything was rolled back — no residue.',
+      'Each case ran inside a savepoint, so a failure did not abort the transaction. Everything was rolled back: no residue.',
     table: {
       columns: ['#', 'Case', 'Expected', 'Actual', 'Constraint'],
       rows: results.map((r, i) => [i + 1, r.label, r.expected, r.actual, r.constraint]),
@@ -332,7 +332,7 @@ async function schemasConstraints(): Promise<ActionResult> {
     notes: [
       'NULLS DISTINCT is the default: (tenant, NULL) never collides, which is what makes "no key supplied" mean "new event".',
       '23505 unique_violation, 23503 foreign_key_violation, 23502 not_null_violation, 23514 check_violation.',
-      'The two NULL cases must both succeed — that is the proof, not a side effect.',
+      'The two NULL cases must both succeed: that is the proof, not a side effect.',
     ],
   };
 }
@@ -492,7 +492,7 @@ async function middlewareErrorContract(input: unknown): Promise<ActionResult> {
         ['HTTP status', response.status],
         ['x-request-id header', response.headers.get('x-request-id') ?? '(none)'],
         ['content-type', response.headers.get('content-type') ?? '(none)'],
-        ['x-powered-by', response.headers.get('x-powered-by') ?? '(absent — good)'],
+        ['x-powered-by', response.headers.get('x-powered-by') ?? '(absent: good)'],
         ['body', body],
       ],
     },

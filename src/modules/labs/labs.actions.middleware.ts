@@ -97,7 +97,7 @@ async function middlewareAuth(input: unknown): Promise<ActionResult> {
     },
     notes: [
       '401 = "I do not know you". 403 = "I know you, but not for this". Mixing them up leaks information.',
-      'The demo created three real API keys in app.api_keys and revoked one — the table is finally used.',
+      'The demo created three real API keys in app.api_keys and revoked one: the table is finally used.',
       'Hashing means a database dump cannot be replayed against the API.',
     ],
   };
@@ -144,7 +144,7 @@ async function middlewareValidation(input: unknown): Promise<ActionResult> {
     },
     notes: [
       'The error envelope is the same one used for every failure: code, message, details, requestId.',
-      'strictObject rejects unknown keys — that is how typos and mass-assignment attempts surface.',
+      'strictObject rejects unknown keys: that is how typos and mass-assignment attempts surface.',
       'Validation runs after rate limiting on purpose: a flood of invalid requests still consumes budget.',
     ],
   };
@@ -173,7 +173,7 @@ async function middlewareRateLimit(input: unknown): Promise<ActionResult> {
         index + 1,
         result.status,
         result.headers.get('ratelimit-remaining') ?? '',
-        result.headers.get('retry-after') ?? '—',
+        result.headers.get('retry-after') ?? 'n/a',
       ]),
     },
     notes: [
@@ -222,7 +222,7 @@ async function middlewareRawBody(input: unknown): Promise<ActionResult> {
       ],
     },
     notes: [
-      'The body has odd spacing and a trailing space on purpose — a re-serialised object would hash differently.',
+      'The body has odd spacing and a trailing space on purpose: a re-serialised object would hash differently.',
       'express.json({ verify }) runs before parsing, which is the only place the original Buffer exists.',
       'Change one byte and the signature stops matching; that is the entire point of signing the raw body.',
       payload.received ? `Parsed body: ${JSON.stringify(payload.received)}` : 'Parsed body missing',

@@ -25,7 +25,7 @@ function getClient(): Redis {
     // A cache must never stall a request: bound every command, so a blip costs
     // at most one timeout before the read falls through to Postgres.
     commandTimeout: 300,
-    // The cache is disposable — the labs stop the container on purpose — so a
+    // The cache is disposable (the labs stop the container on purpose), so a
     // blip must not disable caching until the process restarts. Back off, then
     // give up only after a long run of failures.
     retryStrategy: (times: number) => (times > 30 ? null : Math.min(times * 200, 2000)),

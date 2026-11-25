@@ -7,8 +7,8 @@ In plain words: a customer tells us "something happened"; we store it, work out
 who wants to know, and call each of their URLs with a signed message. If a URL is
 down we try again later instead of losing the message.
 
-New to the vocabulary? Every abbreviation used here — TTL, HMAC, ETag, MVCC,
-FK, PK, SLO and the rest — is explained in the built-in glossary at
+New to the vocabulary? Every abbreviation used here (TTL, HMAC, ETag, MVCC,
+FK, PK, SLO and the rest) is explained in the built-in glossary at
 **http://localhost:3000/labs** (the *Glossary* button), and the same text appears
 when you hover any dotted-underline word in the labs.
 
@@ -16,7 +16,7 @@ when you hover any dotted-underline word in the labs.
 
 - Node 24, TypeScript (strict, ESM)
 - Express 5
-- PostgreSQL 17 (node-postgres, hand-written SQL) — migrations via node-pg-migrate
+- PostgreSQL 17 (node-postgres, hand-written SQL): migrations via node-pg-migrate
 
 ## Branching model
 
@@ -70,7 +70,7 @@ That starts five services:
 
 The `cache` service is deliberately **not** a dependency of `api`: it has no
 volume, no `depends_on`, and nothing already working uses it. Stop it with
-`docker compose stop cache` and reads keep succeeding from Postgres — that is
+`docker compose stop cache` and reads keep succeeding from Postgres: that is
 the fail-open behaviour the caching card demonstrates.
 
 Useful commands:
@@ -113,7 +113,7 @@ Health check: `GET /v1/health`
 
 ## Interview labs
 
-Open **http://localhost:3000/labs** — a study guide covering every topic built in
+Open **http://localhost:3000/labs**: a study guide covering every topic built in
 this repo, with one-click demos that run against the real Postgres and Redis.
 
 - 17 topics, each with key ideas, runnable snippets and an interview drill

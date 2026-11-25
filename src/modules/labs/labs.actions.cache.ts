@@ -61,7 +61,7 @@ async function cacheHitMiss(input: unknown): Promise<ActionResult> {
   return {
     title: cacheLive
       ? `${Math.round(speedup)}× faster on the second read`
-      : 'The cache is unreachable — fail-open kept every read working',
+      : 'The cache is unreachable: fail-open kept every read working',
     summary: cacheLive
       ? 'Cache-aside: check the cache, miss, compute from Postgres, store with a TTL, return. The next read never touches the database.'
       : 'Every read fell through to Postgres. The cache client swallows connection errors, so the endpoint stayed correct and only latency was lost.',
@@ -76,7 +76,7 @@ async function cacheHitMiss(input: unknown): Promise<ActionResult> {
     },
     notes: cacheLive
       ? [
-          'The summary runs three correlated counts, so the database read is not free — the gap is real, not a Redis benchmark.',
+          'The summary runs three correlated counts, so the database read is not free: the gap is real, not a Redis benchmark.',
           'Only one computation happened across three requests; the counter is the proof, not the timing.',
           'Cache hit latency is a network round trip plus deserialisation. If that is still too slow, the answer is a local cache, not a faster Redis.',
           'The response says where the data came from (x-cache) so you can debug a stale read in production.',
@@ -165,12 +165,12 @@ async function cacheStampede(input: unknown): Promise<ActionResult> {
     notes: [
       `Wall time for ${concurrency} callers: ${Math.round(elapsed)} ms.`,
       `Database computations: ${computations}. One leader did the work, the rest waited on the same promise.`,
-      'This is in-process only. With N replicas you get up to N leaders — use `SET key value NX PX 5000` as a Redis lock, or jitter the TTL.',
+      'This is in-process only. With N replicas you get up to N leaders: use `SET key value NX PX 5000` as a Redis lock, or jitter the TTL.',
       'Jitter matters even with a perfect cache: if 10k keys expire together, they all miss together.',
       ...(cacheUsed
         ? []
         : [
-            'No caller reached the cache: it is unreachable, so every wave of arrivals paid for the query again. Correctness survived, latency did not — that is fail-open.',
+            'No caller reached the cache: it is unreachable, so every wave of arrivals paid for the query again. Correctness survived, latency did not: that is fail-open.',
           ]),
     ],
   };
@@ -254,7 +254,7 @@ async function cacheStaleness(input: unknown): Promise<ActionResult> {
     notes: [
       'Staleness is not a bug in the cache; it is the trade you made for the speedup. The bug is forgetting to invalidate on write.',
       `The TTL of ${SUMMARY_TTL_SECONDS}s bounds how wrong a reader can be if invalidation is missed.`,
-      'For a dashboard summary, seconds of staleness are fine. For an account balance, they are not — which is why caching is a per-endpoint decision.',
+      'For a dashboard summary, seconds of staleness are fine. For an account balance, they are not, which is why caching is a per-endpoint decision.',
       'The lab event was removed and the key invalidated afterwards, so the demo is repeatable.',
     ],
   };
@@ -278,7 +278,7 @@ async function cacheStatusAction(): Promise<ActionResult> {
       ],
     },
     notes: [
-      'In compose the cache is its own Redis container with no volume — a cache must be disposable.',
+      'In compose the cache is its own Redis container with no volume: a cache must be disposable.',
       'It is deliberately not in the API depends_on list: requiring the cache would turn a latency optimisation into a startup dependency.',
       'Try `docker compose stop cache`, then hit the summary endpoint: it should still answer, just from Postgres.',
       'Queue and log data live in the main Redis (db 0); a cache flush cannot touch them.',

@@ -1,4 +1,4 @@
-# HookRelay — design notes
+# HookRelay: design notes
 
 What the system does, how it fails, and why the pieces are shaped this way.
 Written to be defended in a design review, not to describe the file tree.
@@ -22,7 +22,7 @@ The hard requirements are the ones that shape everything else:
   see duplicates; both need a stable key.
 - **The API must not wait on customers.** A 30-second receiver cannot become a
   30-second request.
-- **Money-grade audit.** What changed, who changed it, and when — independent of
+- **Money-grade audit.** What changed, who changed it, and when, independent of
   operational logs.
 
 ## Request path
@@ -90,7 +90,7 @@ Ids: UUIDs on externally visible rows (unguessable, non-enumerable),
 | Receiver returns 500 | Retried up to 5 attempts with doubling backoff, then `dead` | The delivery is not lost; it is visible as dead |
 | Receiver returns 400 | `UnrecoverableError`, dead immediately | Repeating a deterministic failure only burns attempts |
 | Worker killed mid-job | Job stays `active`; BullMQ's stalled check re-delivers it | At-least-once; the processor skips `succeeded` rows |
-| Redis down | Reads keep working; limiter fails open; **enqueue fails after commit** | Known gap — see below |
+| Redis down | Reads keep working; limiter fails open; **enqueue fails after commit** | Known gap: see below |
 | Pool saturated | Everything using the pool queues, including health checks | Health checks should use a separate small pool |
 | Duplicate inbound webhook | `ON CONFLICT DO NOTHING` on `(source, provider_event_id)` | 200 `duplicate: true` tells the provider to stop retrying |
 | Clock skew | Signature rejected outside a 300s window | The timestamp is inside the signed string |
@@ -123,14 +123,14 @@ partial mitigation (it can find stuck rows, but it does not currently re-enqueue
   not exist cannot be used to turn the cache into a database load generator.
 
 Single-flight (`Map<key, Promise>`) collapses concurrent misses inside one
-process. It does not span replicas — that needs `SET NX PX` in Redis, which the
+process. It does not span replicas: that needs `SET NX PX` in Redis, which the
 caching card shows as a snippet and names as the gap.
 
 ## Observability
 
 - **Logs:** pino JSON, redaction inside the logger, correlation id propagated
   from `x-request-id` into job payloads.
-- **Log fan-out:** Redis Streams with `MAXLEN ~ 10000` — replayable, unlike
+- **Log fan-out:** Redis Streams with `MAXLEN ~ 10000`, replayable, unlike
   Pub/Sub.
 - **Audit:** separate table, separate retention, written through a service.
 - **Health:** `/v1/health` measures Postgres and Redis separately and names the
@@ -150,11 +150,11 @@ These are shapes, not benchmarks: the load client and the server share one CPU.
 ## Deliberately not built
 
 - **Outbox relay** for the enqueue-after-commit gap.
-- **Secret rotation** — `endpoints.secret_previous` exists, unused.
-- **SSRF protection** — no private-IP blocking on endpoint URLs.
-- **Replay endpoint** — dead deliveries cannot be re-queued from the API.
-- **Per-tenant fairness** — one noisy tenant can occupy all workers.
-- **Multi-region** — no locality or failover story.
+- **Secret rotation**: `endpoints.secret_previous` exists, unused.
+- **SSRF protection**: no private-IP blocking on endpoint URLs.
+- **Replay endpoint**: dead deliveries cannot be re-queued from the API.
+- **Per-tenant fairness**: one noisy tenant can occupy all workers.
+- **Multi-region**: no locality or failover story.
 
 Being able to name these, and say what you would do first, is worth more in an
 interview than pretending the system is finished.

@@ -33,7 +33,7 @@ export async function processOpsJob(job: Job<OpsJobData>): Promise<void> {
 
   const [run] = claimed.rows;
   if (!run) {
-    console.log(`↷ ${job.name} @ ${windowStart.toISOString()} already claimed — skipping`);
+    console.log(`↷ ${job.name} @ ${windowStart.toISOString()} already claimed: skipping`);
     return;
   }
 
@@ -48,7 +48,7 @@ export async function processOpsJob(job: Job<OpsJobData>): Promise<void> {
         where id = $1`,
       [run.id, items],
     );
-    console.log(`✔ ${job.name} @ ${windowStart.toISOString()} — ${items} items`);
+    console.log(`✔ ${job.name} @ ${windowStart.toISOString()}: ${items} items`);
   } catch (err) {
     await pool.query(
       `update ops.job_runs set status = 'failed', error = $2, finished_at = now() where id = $1`,

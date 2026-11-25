@@ -77,15 +77,15 @@ async function concurrencyLostUpdate(): Promise<ActionResult> {
         rows: [
           ['BEGIN', 'open', 'open', 0],
           ['SELECT value', readA, readB, 0],
-          ['UPDATE value = read + 1', readA + 1, '—', readA + 1],
-          ['COMMIT', 'done', '—', readA + 1],
-          ['UPDATE value = read + 1', '—', readB + 1, readB + 1],
-          ['COMMIT', '—', 'done', final],
+          ['UPDATE value = read + 1', readA + 1, 'n/a', readA + 1],
+          ['COMMIT', 'done', 'n/a', readA + 1],
+          ['UPDATE value = read + 1', 'n/a', readB + 1, readB + 1],
+          ['COMMIT', 'n/a', 'done', final],
           ['expected after two increments', 2, '', final],
         ],
       },
       notes: [
-        'This is the lost update. No error, no warning — just one fewer increment.',
+        'This is the lost update. No error, no warning: just one fewer increment.',
         'The default isolation level is READ COMMITTED, which guarantees you see committed rows, not that your read is still valid when you write.',
         'An atomic statement (`value = value + 1`) would not lose the update; the loss happens because the value was read into application code first.',
         'This is the bug behind "we lost a payment" incidents, and it is invisible in single-user testing.',
@@ -152,7 +152,7 @@ async function concurrencyForUpdate(): Promise<ActionResult> {
       },
       notes: [
         'Locking turns a silent data bug into latency. That is usually the right trade for money.',
-        'The lock is held until COMMIT or ROLLBACK. A transaction that waits on user input holds it for seconds — keep transactions short.',
+        'The lock is held until COMMIT or ROLLBACK. A transaction that waits on user input holds it for seconds: keep transactions short.',
         'FOR UPDATE on a row that does not exist locks nothing. Use a unique index and upsert, or lock a parent row.',
         'Alternatives: atomic SQL (`value = value + 1`), optimistic locking with a version column, or SERIALIZABLE with retries.',
       ],
@@ -208,7 +208,7 @@ async function concurrencyDeadlock(): Promise<ActionResult> {
         ],
       },
       notes: [
-        '40P01 is deadlock_detected. It is a normal, expected error — your code must retry.',
+        '40P01 is deadlock_detected. It is a normal, expected error: your code must retry.',
         'deadlock_timeout defaults to 1s; after that Postgres checks for a cycle and aborts one side.',
         'The fix is lock ordering: every transaction takes rows in a deterministic order (e.g. ascending id).',
         'Deadlocks are a design smell, not a database bug. Retrying without fixing the order just moves the cost.',

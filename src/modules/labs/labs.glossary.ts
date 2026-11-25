@@ -64,7 +64,7 @@ export const glossary: GlossaryEntry[] = [
   {
     term: 'payload',
     full: 'message body',
-    plain: 'the data carried inside a request, a response or a job — as opposed to its headers.',
+    plain: 'the data carried inside a request, a response or a job, as opposed to its headers.',
     area: 'web',
   },
   {
@@ -255,7 +255,7 @@ export const glossary: GlossaryEntry[] = [
   {
     term: 'schema',
     full: 'schema (two meanings)',
-    plain: 'a namespace that groups tables (app, audit, ops) — or, loosely, the shape of the tables themselves.',
+    plain: 'a namespace that groups tables (app, audit, ops), or, loosely, the shape of the tables themselves.',
     area: 'postgres',
   },
   {
@@ -291,7 +291,7 @@ export const glossary: GlossaryEntry[] = [
   {
     term: 'index',
     full: 'database index',
-    plain: 'a sorted lookup structure that lets the database find rows without reading the whole table — but it costs time on every write.',
+    plain: 'a sorted lookup structure that lets the database find rows without reading the whole table, but it costs time on every write.',
     area: 'postgres',
   },
   {
@@ -382,7 +382,7 @@ export const glossary: GlossaryEntry[] = [
   {
     term: 'REPEATABLE READ',
     full: 'REPEATABLE READ isolation level',
-    plain: 'one snapshot for the whole transaction, so repeated reads agree — which is what a report needs.',
+    plain: 'one snapshot for the whole transaction, so repeated reads agree, which is what a report needs.',
     area: 'postgres',
     caseSensitive: true,
   },
@@ -482,7 +482,7 @@ export const glossary: GlossaryEntry[] = [
   {
     term: 'expand/contract',
     full: 'expand and contract migration pattern',
-    plain: 'add the new shape while the old one still works, move readers over, then remove the old one — three deploys instead of one risky change.',
+    plain: 'add the new shape while the old one still works, move readers over, then remove the old one: three deploys instead of one risky change.',
     area: 'postgres',
     match: ['expand and contract'],
   },
@@ -556,7 +556,7 @@ export const glossary: GlossaryEntry[] = [
   {
     term: 'at-least-once',
     full: 'at-least-once delivery',
-    plain: 'the guarantee that a job runs one or more times — never zero — so the consumer must tolerate repeats.',
+    plain: 'the guarantee that a job runs one or more times, never zero, so the consumer must tolerate repeats.',
     area: 'queues',
   },
   {
@@ -691,7 +691,7 @@ export const glossary: GlossaryEntry[] = [
   {
     term: 'liveness',
     full: 'liveness vs readiness',
-    plain: 'liveness answers "should this be restarted?"; readiness answers "should traffic be sent here?" — they are different questions.',
+    plain: 'liveness answers "should this be restarted?"; readiness answers "should traffic be sent here?": they are different questions.',
     area: 'ops',
     match: ['readiness'],
   },
@@ -712,7 +712,7 @@ export const glossary: GlossaryEntry[] = [
   {
     term: 'p99',
     full: '99th percentile latency',
-    plain: 'the time below which 99% of requests finished — the tail that people actually notice.',
+    plain: 'the time below which 99% of requests finished: the tail that people actually notice.',
     area: 'ops',
     match: ['p50', 'p95'],
   },
@@ -841,7 +841,7 @@ export const glossary: GlossaryEntry[] = [
   {
     term: 'rebase',
     full: 'git rebase',
-    plain: 'replay your commits on top of a newer base, rewriting their ids — clean, but never on shared history.',
+    plain: 'replay your commits on top of a newer base, rewriting their ids: clean, but never on shared history.',
     area: 'git',
   },
   {
@@ -853,7 +853,7 @@ export const glossary: GlossaryEntry[] = [
   {
     term: 'reset',
     full: 'git reset',
-    plain: 'move the branch pointer, optionally discarding commits — safe locally, destructive on a shared branch.',
+    plain: 'move the branch pointer, optionally discarding commits: safe locally, destructive on a shared branch.',
     area: 'git',
     match: ['reset --hard'],
   },

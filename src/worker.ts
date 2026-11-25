@@ -29,21 +29,21 @@ deliveryWorker.on('failed', (job, err) => {
   const terminal = job.attemptsMade >= max;
   console.log(
     `[${instance}] ${terminal ? '☠ dead' : '↻ retrying'} ${job.id} ` +
-      `(attempt ${job.attemptsMade}/${max}) — ${err.message}`,
+      `(attempt ${job.attemptsMade}/${max}): ${err.message}`,
   );
 });
 
 deliveryWorker.on('error', (err) => console.error(`[${instance}] worker error`, err));
 
 await registerSchedulers();
-console.log(`[${instance}] worker up — queues: ${DELIVERY_QUEUE}, ${OPS_QUEUE}`);
+console.log(`[${instance}] worker up, queues: ${DELIVERY_QUEUE}, ${OPS_QUEUE}`);
 
 let shuttingDown = false;
 
 async function shutdown(signal: string): Promise<void> {
   if (shuttingDown) return;
   shuttingDown = true;
-  console.log(`[${instance}] ${signal} — draining, active jobs finish first`);
+  console.log(`[${instance}] ${signal}: draining, active jobs finish first`);
 
   const force = setTimeout(() => {
     console.error(`[${instance}] drain timed out`);
