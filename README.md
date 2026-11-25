@@ -7,6 +7,39 @@ In plain words: a customer tells us "something happened"; we store it, work out
 who wants to know, and call each of their URLs with a signed message. If a URL is
 down we try again later instead of losing the message.
 
+## What this project is for
+
+This is a study project, not a product. It exists to solve a familiar problem:
+backend concepts are easy to read about and much harder to recognise in real code.
+
+So instead of a folder of isolated snippets, the concepts are built into one
+small, honest system. A real request path needs middleware, validation, a schema,
+migrations, transactions, indexes, a queue, a scheduled job, retries, logs,
+caching and polling. Seeing them work together is what shows how they interact,
+and where they compete for the same time, memory and locks.
+
+Three rules shape it:
+
+- **Every concept runs.** Each demo executes against the real PostgreSQL and
+  Redis containers in this repo and reports measured numbers: p99 latency, rows
+  scanned, queue depth, cache hits, lock waits. Nothing is mocked, and no number
+  is quoted from memory.
+- **Plain language first.** Every topic opens with why the thing exists before
+  how it works, abbreviations are expanded on first use, and the prose avoids
+  jargon stacked on jargon.
+- **The gaps are written down.** What is deliberately not built, and what would
+  fail first, lives in [docs/DESIGN.md](./docs/DESIGN.md). Being able to name the
+  gaps and the trade-offs is part of the exercise.
+
+Topics covered, in study order: Docker and bootstrap, backend architecture,
+Node.js events, PostgreSQL schemas, migrations, Git workflow, middleware, queues,
+cron jobs, indexes, query plans, webhooks, polling, logs, caching, transactions
+and isolation, and a capstone that measures the whole thing under load.
+
+It is written for people preparing for a backend interview (Node.js, TypeScript,
+PostgreSQL, Git, Docker) and for anyone who prefers to learn by running a system
+rather than by reading about one.
+
 New to the vocabulary? Every abbreviation used here (TTL, HMAC, ETag, MVCC,
 FK, PK, SLO and the rest) is explained in the built-in glossary at
 **http://localhost:3000/labs** (the *Glossary* button), and the same text appears
