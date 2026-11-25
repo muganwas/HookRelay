@@ -1,4 +1,4 @@
-﻿import type { LabTopic } from './labs.types.js';
+import type { LabTopic } from './labs.types.js';
 
 export const topics: LabTopic[] = [
   {
@@ -833,6 +833,16 @@ if (!timingSafeEqual(hex(signature), hex(received))) return reject('bad signatur
         label: 'Sign, tamper, replay',
         description: 'Computes a real HMAC, then checks a tampered body and a stale timestamp.',
       },
+      {
+        id: 'webhooks.outbound',
+        label: 'Deliver a signed event end to end',
+        description: 'Creates an event, the worker signs and delivers it back to the inbound receiver, dedupe row verified.',
+      },
+      {
+        id: 'webhooks.inbound',
+        label: 'Accept, dedupe and reject',
+        description: 'Posts five inbound requests: fresh, replay, tampered, stale and unsigned.',
+      },
     ],
   },
   {
@@ -878,6 +888,11 @@ const delay = Math.random() * Math.min(cap, base * 2 ** attempt);`,
         id: 'polling.etag',
         label: 'Round-trip 200 then 304',
         description: 'Requests this server twice, honouring If-None-Match.',
+      },
+      {
+        id: 'polling.lifecycle',
+        label: 'Poll a delivery with ETag and long-poll',
+        description: 'Creates a delivery, then shows the 200, the 304 and a long-poll returning on terminal state.',
       },
     ],
   },

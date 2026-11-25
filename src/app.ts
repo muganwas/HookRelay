@@ -11,6 +11,12 @@ import { createHealthController } from './modules/health/health.controller.js';
 import { createHealthRouter } from './modules/health/health.routes.js';
 import { createEchoController } from './modules/echo/echo.controller.js';
 import { createEchoRouter } from './modules/echo/echo.routes.js';
+import { createEventsController } from './modules/events/events.controller.js';
+import { createEventsRouter } from './modules/events/events.routes.js';
+import { createDeliveryController } from './modules/deliveries/delivery.controller.js';
+import { createDeliveryRouter } from './modules/deliveries/delivery.routes.js';
+import { createInboundController } from './modules/webhooks/inbound.controller.js';
+import { createInboundRouter } from './modules/webhooks/inbound.routes.js';
 import type { RawBodyRequest } from './shared/request-body.js';
 import { createLabsController } from './modules/labs/labs.controller.js';
 import { createLabsRouter } from './modules/labs/labs.routes.js';
@@ -44,6 +50,15 @@ export function createApp(): Express {
 
   app.use('/v1/echo', createEchoRouter(createEchoController()));
   registerMiddleware('router:/v1/echo (auth -> rateLimit -> validate)');
+
+  app.use('/v1/events', createEventsRouter(createEventsController()));
+  registerMiddleware('router:/v1/events (auth -> rateLimit -> validate)');
+
+  app.use('/v1/deliveries', createDeliveryRouter(createDeliveryController()));
+  registerMiddleware('router:/v1/deliveries (auth)');
+
+  app.use('/v1/webhooks/inbound', createInboundRouter(createInboundController()));
+  registerMiddleware('router:/v1/webhooks/inbound (signature)');
 
   app.use('/labs', createLabsRouter(createLabsController()));
   registerMiddleware('router:/labs');

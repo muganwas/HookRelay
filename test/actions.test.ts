@@ -13,6 +13,11 @@ const SERVER_DEPENDENT = new Set([
   'middleware.rawbody',
   'polling.etag',
   'logs.correlation',
+  'webhooks.inbound',
+  // These two need the BullMQ worker running as well, so they are verified
+  // against the compose stack rather than in the host test process.
+  'webhooks.outbound',
+  'polling.lifecycle',
 ]);
 
 after(closeResources);

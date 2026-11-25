@@ -12,6 +12,22 @@ export function createLabsRouter(controller: LabsController): Router {
   router.post('/api/actions/:actionId', controller.runAction);
   router.get('/api/probe/error', controller.probeError);
 
+  // Deterministic HTTP targets so the queue and webhook demos exercise real
+  // network calls instead of mocking the processor.
+  router.all('/api/targets/:code', (req, res) => {
+    const requested = Number(req.params.code);
+    const allowed = new Set([200, 201, 400, 401, 404, 429, 500, 503]);
+    const status = allowed.has(requested) ? requested : 400;
+
+    res.status(status).json({
+      target: 'lab',
+      code: status,
+      ok: status < 400,
+      method: req.method,
+      receivedAt: new Date().toISOString(),
+    });
+  });
+
   // Serve the shell directly; express.static would 301 /labs -> /labs/.
   router.get('/', (_req, res) => {
     res.sendFile(path.join(PUBLIC_DIR, 'index.html'));

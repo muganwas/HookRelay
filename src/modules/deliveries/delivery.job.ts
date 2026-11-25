@@ -6,8 +6,9 @@ export const DELIVERY_QUEUE = 'deliveries';
 
 export type DeliveryJob = {
   deliveryId: string;
-  url: string;
-  payload: unknown;
+  /** Lab mode only: deliver straight to this URL and skip the database. */
+  url?: string;
+  payload?: unknown;
 };
 
 let queue: Queue<DeliveryJob> | undefined;

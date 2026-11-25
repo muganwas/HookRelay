@@ -223,6 +223,16 @@ describe('server-dependent demos', () => {
     assert.equal(byKey.get('match'), true);
     assert.equal(Number(byKey.get('raw bytes received')), Number(byKey.get('raw bytes as sent')));
   });
+
+  it('webhooks.inbound accepts a fresh signature and dedupes a replay', async () => {
+    const action = getLabAction('webhooks.inbound');
+    assert.ok(action);
+
+    const result = await action.run({ baseUrl });
+    const statuses = (result.table?.rows ?? []).map((row) => Number(row[1]));
+
+    assert.deepEqual(statuses, [202, 200, 401, 401, 401]);
+  });
 });
 
 describe('health', () => {
