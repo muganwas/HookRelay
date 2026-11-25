@@ -10,7 +10,9 @@ export function createEventsRouter(controller: EventsController): Router {
   router.post(
     '/',
     requireApiKey('events:write'),
-    rateLimit({ limit: 60, windowSeconds: 60, bucket: 'events' }),
+    // Ingest gets a larger budget than the scratch echo route: different
+    // endpoints deserve different limits.
+    rateLimit({ limit: 600, windowSeconds: 60, bucket: 'events' }),
     validateBody(CreateEventBody),
     controller.create,
   );

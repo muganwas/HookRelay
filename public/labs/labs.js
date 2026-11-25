@@ -294,7 +294,7 @@ function renderActionCard(topic, action, registry) {
   registry.set(action.id, { button, slot });
 
   button.addEventListener('click', async () => {
-    if (action.heavy && !window.confirm(`${action.label} is heavy (seeds ~100k rows). Continue?`)) {
+    if (action.heavy && !window.confirm(`${action.label} is heavy and may take a few seconds. Continue?`)) {
       return;
     }
     await execute(topic.id, action, slot, button);

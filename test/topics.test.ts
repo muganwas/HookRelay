@@ -109,6 +109,12 @@ describe('action registry', () => {
 
   it('marks heavy actions so the UI can warn', () => {
     const heavy = labActions.filter((a) => a.heavy).map((a) => a.id);
-    assert.deepEqual(heavy.sort(), ['indexes.before-after', 'indexes.seed']);
+    assert.deepEqual(heavy.sort(), [
+      'capstone.load',
+      'capstone.pool',
+      'capstone.slow-receiver',
+      'indexes.before-after',
+      'indexes.seed',
+    ]);
   });
 });

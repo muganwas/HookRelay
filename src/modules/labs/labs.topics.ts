@@ -961,6 +961,106 @@ redis-cli XREAD COUNT 10 BLOCK 0 STREAMS logs:events '$'`,
       },
     ],
   },
+  {
+    id: 'capstone',
+    order: 15,
+    phase: '13',
+    title: 'Capstone: operate it',
+    status: 'live',
+    summary:
+      'Everything so far builds the system. This card measures it under load and breaks its dependencies on purpose, so you can talk about behaviour instead of diagrams.',
+    keyIdeas: [
+      'A fast request path is one that does no waiting: validate, write, enqueue, return. Every second spent talking to a customer endpoint belongs in a worker.',
+      'p99 is the number to quote. Averages hide the tail, and the tail is what people experience and what an SLO is written against.',
+      'A connection pool is a bounded queue. Saturating it makes even `/v1/health` wait, which makes an orchestrator restart a pod that was only busy.',
+      'Redis failure is not one behaviour: reads keep working, the limiter fails open, and enqueue fails *after* the transaction committed — that gap is why the outbox pattern exists.',
+      'A slow receiver is absorbed by the queue up to worker concurrency. Beyond that, waiting grows; it never becomes API latency.',
+      'On-call order: worker count, queue depth, delivery states, pool counters, table size. Only then read the logs.',
+      'Every number here comes from the running system, so you can quote measured latencies rather than guesses.',
+    ],
+    interviewQuestions: [
+      'p99 regressed after a deploy. How do you find the cause, and what do you roll back first?',
+      'The delivery queue is backing up. What are the first three things you check?',
+      'Redis is down for two minutes. What still works, what fails, and what has to be repaired afterwards?',
+      'How do you prove the connection pool is exhausted, from inside the application?',
+      'Why is "add more replicas" sometimes the wrong answer to a pool problem?',
+      'A customer endpoint consistently takes 30 seconds. What breaks first in your system?',
+      'What would you alert on, and at what threshold — queue depth, worker count, or error rate?',
+      'Which of these failures would you page someone for at 3am, and which can wait until morning?',
+    ],
+    snippets: [
+      {
+        label: 'bounded concurrency for a load test',
+        language: 'ts',
+        code: `let cursor = 0;
+const runners = Array.from({ length: 20 }, async () => {
+  for (;;) {
+    const index = cursor++;
+    if (index >= 200) return;
+    await call(index); // at most 20 in flight
+  }
+});
+await Promise.all(runners);`,
+      },
+      {
+        label: 'percentiles, not averages',
+        language: 'ts',
+        code: `const sorted = latencies.sort((a, b) => a - b);
+const p = (q: number) => sorted[Math.ceil((q / 100) * sorted.length) - 1];
+console.log({ p50: p(50), p95: p(95), p99: p(99) });`,
+      },
+      {
+        label: 'prove pool saturation',
+        language: 'ts',
+        code: `const held = [];
+for (let i = 0; i < pool.max; i++) held.push(await pool.connect());
+
+const waiter = pool.connect();      // this one is now queued
+await sleep(100);
+console.log('waiting:', pool.waitingCount); // 1
+
+held.pop().release();               // frees a slot
+await waiter;                       // resolves
+// finally { held.forEach(c => c.release()) }`,
+      },
+      {
+        label: 'fail-open limiter',
+        language: 'ts',
+        code: `try {
+  count = await redis.incr(key);
+} catch {
+  return next(); // throttling must not become an outage
+}`,
+      },
+    ],
+    actions: [
+      {
+        id: 'capstone.load',
+        label: 'Load test the ingest path',
+        description: '200 requests at concurrency 20 through auth, validation, fan-out and enqueue; reports p50/p95/p99.',
+      },
+      {
+        id: 'capstone.pool',
+        label: 'Saturate the connection pool',
+        description: 'Checks out every pool slot, proves the next caller waits, then frees one and watches it proceed.',
+      },
+      {
+        id: 'capstone.redis-down',
+        label: 'Probe a dead Redis',
+        description: 'Times a failed connect and maps which features degrade, which fail open and which fail hard.',
+      },
+      {
+        id: 'capstone.slow-receiver',
+        label: 'Deliver to a slow receiver',
+        description: 'A 2.5s receiver: the API stays fast, the worker absorbs the wait.',
+      },
+      {
+        id: 'capstone.readout',
+        label: 'Live system readout',
+        description: 'Workers, queue depth, delivery states, attempt timings, pool counters and table sizes in one table.',
+      },
+    ],
+  },
 ];
 
 export function getTopic(id: string): LabTopic | undefined {
