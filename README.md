@@ -9,13 +9,45 @@ subscriptions, signs each request, and retries failures with backoff.
 - Express 5
 - PostgreSQL 17 (node-postgres, hand-written SQL) — migrations via node-pg-migrate
 
-## Run locally
+## Run with Docker (recommended)
 
-    docker compose up -d
+    docker compose up -d --build
+
+That starts four services:
+
+| Service | What it does |
+|---|---|
+| `postgres` | Postgres 17, named volume, healthcheck |
+| `redis` | Redis 7 with AOF, healthcheck |
+| `migrate` | one-shot: applies migrations, then exits 0 |
+| `api` | the HTTP server on http://localhost:3000 |
+| `worker` | the BullMQ worker, separate process |
+
+`api` and `worker` wait for `migrate` to finish successfully, so a fresh
+`docker compose up` never runs against a missing schema.
+
+Useful commands:
+
+    docker compose ps                 # status + health
+    docker compose logs -f api        # follow the server
+    docker compose logs -f worker     # follow job processing
+    docker compose down               # stop (keeps data)
+    docker compose down -v            # stop and wipe the volumes
+
+Two demos only work on the host: the **Git** card needs a `git` binary and the
+`.git` directory, and the **architecture** card scans `src/` there (in Docker it
+scans the compiled `dist/` instead). Both say so in their output.
+
+## Run on the host (for development)
+
+    docker compose up -d postgres redis
     npm install
     cp .env.example .env
     npm run migrate -- up
-    npm run dev
+    npm run dev          # http://localhost:3000
+    npm run worker       # second terminal, for queue demos
+
+`npm start` runs the compiled build, so run `npm run build` first.
 
 Health check: `GET /v1/health`
 

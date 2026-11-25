@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import type { ActionDefinition, ActionResult } from './labs.types.js';
@@ -111,8 +112,22 @@ function layerOf(file: string): string {
 }
 
 async function architectureLayers(): Promise<ActionResult> {
-  const srcRoot = path.join(PROJECT_ROOT, 'src');
-  const { hits, scanned } = await scanImports(srcRoot);
+  // In the container only the compiled output exists, so scan dist instead.
+  const candidates = [
+    { root: path.join(PROJECT_ROOT, 'src'), label: 'src (TypeScript)' },
+    { root: path.join(PROJECT_ROOT, 'dist'), label: 'dist (compiled JS)' },
+  ];
+  const chosen = candidates.find((candidate) => existsSync(candidate.root));
+
+  if (!chosen) {
+    return {
+      title: 'No source tree found',
+      summary: `Neither src/ nor dist/ exists under ${PROJECT_ROOT}.`,
+      notes: ['Run this from the project root, or build the project first.'],
+    };
+  }
+
+  const { hits, scanned } = await scanImports(chosen.root);
 
   const rows: Array<Array<string | number | boolean | null>> = [];
   let violations = 0;
@@ -142,7 +157,7 @@ async function architectureLayers(): Promise<ActionResult> {
 
   return {
     title: violations === 0 ? 'Layer rules hold' : `${violations} violation(s) found`,
-    summary: `Scanned ${scanned} source files. The rule is one-directional: routes -> controller -> service -> infra, with pg confined to infra.`,
+    summary: `Scanned ${scanned} files in ${chosen.label}. The rule is one-directional: routes -> controller -> service -> infra, with pg confined to infra.`,
     table: {
       columns: ['File', 'Line', 'Module', 'Type-only', 'Verdict'],
       rows,
@@ -151,6 +166,9 @@ async function architectureLayers(): Promise<ActionResult> {
       'controllers importing `RequestHandler` with `import type` is correct: it erases at compile time.',
       'routes importing `Router` at runtime is correct: routes are the HTTP adapter.',
       'A violation would be `pg` outside infra, or runtime express inside a service.',
+      chosen.label.startsWith('dist')
+        ? 'Scanning compiled output: type-only imports are erased, so expect fewer hits than in src.'
+        : 'Scanning TypeScript sources: every import is visible, including type-only ones.',
     ],
   };
 }
@@ -396,18 +414,30 @@ async function migrationsLedger(): Promise<ActionResult> {
   };
 }
 
+async function safeGit(args: string[]): Promise<string> {
+  try {
+    return await run('git', args, PROJECT_ROOT);
+  } catch (err) {
+    return `(unavailable) ${(err as Error).message}`;
+  }
+}
+
 async function gitGraph(): Promise<ActionResult> {
   const [graph, branches, status, shallow] = await Promise.all([
-    run('git', ['log', '--oneline', '--graph', '--first-parent', '-10', '--decorate'], PROJECT_ROOT),
-    run('git', ['branch', '-vv'], PROJECT_ROOT),
-    run('git', ['status', '--short', '--branch'], PROJECT_ROOT),
-    run('git', ['log', '--all', '--oneline', '-3'], PROJECT_ROOT),
+    safeGit(['log', '--oneline', '--graph', '--first-parent', '-10', '--decorate']),
+    safeGit(['branch', '-vv']),
+    safeGit(['status', '--short', '--branch']),
+    safeGit(['log', '--all', '--oneline', '-3']),
   ]);
 
+  const outputs = [graph, branches, status, shallow];
+  const unavailable = outputs.every((value) => value.startsWith('(unavailable)'));
+
   return {
-    title: 'Read-only history snapshot',
-    summary:
-      '--first-parent follows trunk only. --all includes tooling refs, which is why it can look like unrelated history.',
+    title: unavailable ? 'Git is not available here' : 'Read-only history snapshot',
+    summary: unavailable
+      ? 'The container image has no git binary and no .git directory, so this demo only works on the host.'
+      : '--first-parent follows trunk only. --all includes tooling refs, which is why it can look like unrelated history.',
     table: {
       columns: ['Command', 'Output'],
       rows: [
@@ -418,7 +448,9 @@ async function gitGraph(): Promise<ActionResult> {
       ],
     },
     notes: [
-      'If --all shows commits with no connector, they belong to a different root (tooling refs), not to your trunk.',
+      unavailable
+        ? 'This is expected in Docker: run `npm run dev` on the host to use this demo, or read history with `git log` in your terminal.'
+        : 'If --all shows commits with no connector, they belong to a different root (tooling refs), not to your trunk.',
     ],
   };
 }
