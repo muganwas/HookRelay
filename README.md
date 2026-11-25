@@ -45,18 +45,24 @@ Two rules that matter:
 
     docker compose up -d --build
 
-That starts four services:
+That starts five services:
 
 | Service | What it does |
 |---|---|
 | `postgres` | Postgres 17, named volume, healthcheck |
 | `redis` | Redis 7 with AOF, healthcheck |
+| `cache` | a **second, throwaway** Redis for the caching labs (port 6380, no volume) |
 | `migrate` | one-shot: applies migrations, then exits 0 |
 | `api` | the HTTP server on http://localhost:3000 |
 | `worker` | the BullMQ worker, separate process |
 
 `api` and `worker` wait for `migrate` to finish successfully, so a fresh
 `docker compose up` never runs against a missing schema.
+
+The `cache` service is deliberately **not** a dependency of `api`: it has no
+volume, no `depends_on`, and nothing already working uses it. Stop it with
+`docker compose stop cache` and reads keep succeeding from Postgres — that is
+the fail-open behaviour the caching card demonstrates.
 
 Useful commands:
 
@@ -92,6 +98,8 @@ Health check: `GET /v1/health`
 | GET | `/v1/deliveries/:id/attempts` | API key + `deliveries:read` | attempt history |
 | POST | `/v1/echo` | API key + `echo:write` | scratch endpoint used by the middleware labs |
 | POST | `/v1/webhooks/inbound/:source` | HMAC signature | provider-facing receiver with dedupe |
+| GET | `/v1/tenants/:id/summary` | API key + `tenants:read` | cached aggregate (`x-cache: hit`/`miss`/`negative`) |
+| POST | `/v1/tenants/:id/summary/invalidate` | API key + `tenants:write` | drop the cached aggregate |
 | GET | `/v1/health` | none | dependency check |
 
 ## Interview labs
@@ -99,13 +107,14 @@ Health check: `GET /v1/health`
 Open **http://localhost:3000/labs** — a study guide covering every topic built in
 this repo, with one-click demos that run against the real Postgres and Redis.
 
-- 16 topics, each with key ideas, runnable snippets and an interview drill
-- 48 one-click demos: constraint probes, migration drift, layer-rule scan, EventEmitter
+- 17 topics, each with key ideas, runnable snippets and an interview drill
+- 54 one-click demos: constraint probes, migration drift, layer-rule scan, EventEmitter
   semantics, queue retries and dedupe, cron claim race, index before/after, query
   plans, log redaction and stream tail, audit writes, API-key auth, rate limiting,
   raw-body hashing, signed end-to-end delivery, inbound dedupe, ETag and long-poll,
-  lost updates, row locks, deadlocks, serialization failures, load percentiles,
-  pool saturation and a live system readout
+  cache hit/miss, invalidation, stampedes, penetration, staleness, lost updates,
+  row locks, deadlocks, serialization failures, load percentiles, pool saturation
+  and a live system readout
 - Progress is stored in localStorage
 
 Architecture, failure modes and trade-offs are written up in
@@ -125,7 +134,7 @@ The suite talks to the containers from `docker compose up -d` and needs `.env`.
 
     src/api.ts      entrypoint: listen + graceful shutdown
     src/app.ts      composition root
-    src/infra/      pg pool, redis client, queue connection
+    src/infra/      pg pool, redis client, queue connection, fail-open cache client
     src/shared/     errors, request id, error handler, middleware registry
     src/modules/    feature modules (routes -> controller -> service)
     src/modules/labs/  topic content + one-click demo actions

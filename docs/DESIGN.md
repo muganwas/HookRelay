@@ -87,6 +87,7 @@ Ids: UUIDs on externally visible rows (unguessable, non-enumerable),
 | Pool saturated | Everything using the pool queues, including health checks | Health checks should use a separate small pool |
 | Duplicate inbound webhook | `ON CONFLICT DO NOTHING` on `(source, provider_event_id)` | 200 `duplicate: true` tells the provider to stop retrying |
 | Clock skew | Signature rejected outside a 300s window | The timestamp is inside the signed string |
+| Cache down | Summary reads fall through to Postgres, slower but correct | The cache is an optimisation, so it fails open |
 
 ### The gap worth naming: enqueue after commit
 
@@ -98,6 +99,25 @@ transaction (an `outbox` table), and let a relay read unprocessed rows and
 publish them. Delivery then becomes at-least-once from the database, not from
 the queue. This build does not implement it; the `retry-sweeper` cron is the
 partial mitigation (it can find stuck rows, but it does not currently re-enqueue).
+
+## Caching
+
+`GET /v1/tenants/:id/summary` is cache-aside: Redis, then Postgres, then a
+30-second TTL. Three decisions are deliberate:
+
+- **Its own service.** `cache` is a second Redis in compose (port 6380, no
+  volume). Nothing else uses it, so the caching labs cannot corrupt queues,
+  idempotency keys or the log stream. When `CACHE_URL` is unset the client falls
+  back to the main Redis on **db 1**, so host development and the test suite work
+  without the extra container.
+- **Fail open.** Every cache call is wrapped: a connection error returns a miss.
+  A dead cache costs latency, never availability.
+- **Two TTLs.** 30s for a real summary, 5s for a *negative* entry, so ids that do
+  not exist cannot be used to turn the cache into a database load generator.
+
+Single-flight (`Map<key, Promise>`) collapses concurrent misses inside one
+process. It does not span replicas — that needs `SET NX PX` in Redis, which the
+caching card shows as a snippet and names as the gap.
 
 ## Observability
 

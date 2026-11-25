@@ -962,8 +962,124 @@ redis-cli XREAD COUNT 10 BLOCK 0 STREAMS logs:events '$'`,
     ],
   },
   {
-    id: 'concurrency',
+    id: 'caching',
     order: 15,
+    phase: '11c',
+    title: 'Caching',
+    status: 'live',
+    summary:
+      'A separate cache service, its own keyspace, and the four ways a cache goes wrong: stale reads, stampedes, penetration, and forgetting to invalidate.',
+    keyIdeas: [
+      'Cache-aside is the default pattern: read the cache, on a miss read the source, store with a TTL, return. The app owns the cache, not the database.',
+      'A cache is a **correctness trade**, not a speed knob. You are choosing to serve old data for a bounded time; the question is how bound.',
+      'Invalidate on write, and invalidate **after** the transaction commits. The TTL is the safety net, not the strategy.',
+      'A stampede is many callers missing the same key at once. Single-flight collapses them in one process; across replicas you need a Redis lock or TTL jitter.',
+      'Negative caching stops an attacker enumerating missing ids from turning your cache into a database load generator.',
+      'A cache outage must **fail open**. If the cache is required, you have made your latency optimisation into a startup dependency.',
+    ],
+    interviewQuestions: [
+      'Walk me through cache-aside for a read endpoint. Where does invalidation go?',
+      'Why invalidate after commit rather than before?',
+      'Ten thousand keys expire at the same second. What happens and how do you prevent it?',
+      'What is cache penetration, and how is it different from a stampede?',
+      'What would you cache in this system, and what would you never cache?',
+      'How do you keep the cache consistent across several API replicas?',
+      'What happens to your read path when the cache is down?',
+    ],
+    snippets: [
+      {
+        label: 'cache-aside with a TTL',
+        language: 'ts',
+        code: `const key = \`tenant-summary:\${tenantId}\`;
+
+const cached = await cacheGet<TenantSummary>(key);
+if (cached) return { ...cached, source: 'cache' };
+
+const summary = await computeSummary(tenantId);   // the expensive query
+await cacheSet(key, summary, 30);                 // TTL is a safety net
+return { ...summary, source: 'db' };`,
+      },
+      {
+        label: 'single flight for a stampede',
+        language: 'ts',
+        code: `let pending = inFlight.get(key);
+const leader = pending === undefined;
+
+if (!pending) {
+  pending = compute(key)
+    .then(async (value) => { await cacheSet(key, value, 30); return value; })
+    .finally(() => inFlight.delete(key));
+  inFlight.set(key, pending);
+}
+
+const value = await pending;   // one database read, many waiters
+return { value, source: leader ? 'db' : 'coalesced' };`,
+      },
+      {
+        label: 'cross-process lock (what single-flight cannot do)',
+        language: 'ts',
+        code: `// SET NX PX is the primitive: only one replica wins the lock.
+const won = await redis.set(\`lock:\${key}\`, '1', 'PX', 5000, 'NX');
+if (!won) {
+  await sleep(50);
+  return cacheGet(key);      // re-check, someone else is filling it
+}
+
+try {
+  const value = await compute(key);
+  await cacheSet(key, value, 30);
+  return value;
+} finally {
+  await redis.del(\`lock:\${key}\`);
+}`,
+      },
+      {
+        label: 'negative caching',
+        language: 'ts',
+        code: `const summary = await computeSummary(tenantId);
+
+// 5s, not 30s: the row may be created a moment later.
+await cacheSet(key, summary ?? { __missing: true }, summary ? 30 : 5);
+
+return summary;   // null -> 404, but the next request never hits the database`,
+      },
+    ],
+    actions: [
+      {
+        id: 'cache.hit-miss',
+        label: 'Measure a cache miss vs hit',
+        description: 'Invalidates, then reads three times: one database computation, two cache hits.',
+      },
+      {
+        id: 'cache.invalidate',
+        label: 'Invalidate on write',
+        description: 'Warms the key, invalidates it, and shows the next read going back to the database.',
+      },
+      {
+        id: 'cache.stampede',
+        label: 'Fire 12 concurrent misses',
+        description: 'Single-flight collapses twelve simultaneous misses into one database read.',
+      },
+      {
+        id: 'cache.penetration',
+        label: 'Request ids that do not exist',
+        description: 'Five requests for a missing tenant: one database read, four negative-cache hits.',
+      },
+      {
+        id: 'cache.staleness',
+        label: 'Show stale data after a write',
+        description: 'Writes without invalidating, proving the cache serves the old count until cleared.',
+      },
+      {
+        id: 'cache.status',
+        label: 'Check the cache service',
+        description: 'Reachability, isolation mode, key count and what the fallback is.',
+      },
+    ],
+  },
+  {
+    id: 'concurrency',
+    order: 16,
     phase: '11b',
     title: 'Transactions & isolation',
     status: 'live',
@@ -1068,7 +1184,7 @@ SELECT value FROM counter;  -- 0   (same snapshot)`,
   },
   {
     id: 'capstone',
-    order: 16,
+    order: 17,
     phase: '13',
     title: 'Capstone: operate it',
     status: 'live',

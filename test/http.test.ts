@@ -233,6 +233,67 @@ describe('server-dependent demos', () => {
 
     assert.deepEqual(statuses, [202, 200, 401, 401, 401]);
   });
+
+  it('cache.hit-miss computes once and then serves from cache', async () => {
+    const action = getLabAction('cache.hit-miss');
+    assert.ok(action);
+
+    const result = await action.run({ baseUrl });
+    const sources = (result.table?.rows ?? []).slice(0, 3).map((row) => String(row[1]));
+
+    assert.deepEqual(sources, ['db', 'cache', 'cache']);
+  });
+
+  it('cache.invalidate sends the next read back to the database', async () => {
+    const action = getLabAction('cache.invalidate');
+    assert.ok(action);
+
+    const result = await action.run({ baseUrl });
+    const rows = result.table?.rows ?? [];
+
+    assert.equal(rows[0]?.[1], 'db');
+    assert.equal(rows[1]?.[1], 'cache');
+    assert.equal(rows[3]?.[1], 'db');
+  });
+
+  it('cache.stampede collapses concurrent misses into one read', async () => {
+    const action = getLabAction('cache.stampede');
+    assert.ok(action);
+
+    const result = await action.run({ baseUrl });
+    assert.match(result.title, /1 database read/);
+  });
+
+  it('cache.penetration serves a negative entry for a missing tenant', async () => {
+    const action = getLabAction('cache.penetration');
+    assert.ok(action);
+
+    const result = await action.run({ baseUrl });
+    const rows = result.table?.rows ?? [];
+
+    assert.equal(rows.length, 5);
+    assert.ok(rows.every((row) => Number(row[1]) === 404));
+    assert.equal(rows[0]?.[2], 'db');
+    assert.ok(rows.slice(1).every((row) => row[2] === 'negative-cache'));
+  });
+
+  it('cache.staleness shows the cached read missing the write', async () => {
+    const action = getLabAction('cache.staleness');
+    assert.ok(action);
+
+    const result = await action.run({ baseUrl });
+    assert.match(result.title, /did not see the new row/);
+  });
+
+  it('cache.status reports a reachable, isolated cache', async () => {
+    const action = getLabAction('cache.status');
+    assert.ok(action);
+
+    const result = await action.run({});
+    const byKey = new Map((result.table?.rows ?? []).map((row) => [String(row[0]), row[1]]));
+
+    assert.equal(byKey.get('reachable'), true);
+  });
 });
 
 describe('health', () => {
