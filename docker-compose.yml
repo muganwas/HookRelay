@@ -53,6 +53,9 @@ services:
       PORT: 3000
       DATABASE_URL: postgres://hookrelay:hookrelay@postgres:5432/hookrelay
       REDIS_URL: redis://redis:6379
+      # The worker delivers webhooks back to this API by service name.
+      SELF_BASE_URL: http://api:3000
+      INBOUND_WEBHOOK_SECRET: whsec_lab_inbound_demo_secret
     ports:
       - "3000:3000"
     volumes:
@@ -88,6 +91,8 @@ services:
       NODE_ENV: production
       DATABASE_URL: postgres://hookrelay:hookrelay@postgres:5432/hookrelay
       REDIS_URL: redis://redis:6379
+      SELF_BASE_URL: http://api:3000
+      INBOUND_WEBHOOK_SECRET: whsec_lab_inbound_demo_secret
     depends_on:
       postgres:
         condition: service_healthy

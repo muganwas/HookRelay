@@ -4,6 +4,7 @@ import { eventActions } from './labs.actions.events.js';
 import { logActions } from './labs.actions.logs.js';
 import { middlewareActions } from './labs.actions.middleware.js';
 import { runtimeActions } from './labs.actions.runtime.js';
+import { webhookActions } from './labs.actions.webhooks.js';
 
 const all: ActionDefinition[] = [
   ...dataActions,
@@ -11,6 +12,7 @@ const all: ActionDefinition[] = [
   ...logActions,
   ...middlewareActions,
   ...runtimeActions,
+  ...webhookActions,
 ];
 
 const byId = new Map<string, ActionDefinition>();

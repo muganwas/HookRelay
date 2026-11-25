@@ -83,16 +83,27 @@ scans the compiled `dist/` instead). Both say so in their output.
 
 Health check: `GET /v1/health`
 
+## API
+
+| Method | Path | Auth | Purpose |
+|---|---|---|---|
+| POST | `/v1/events` | API key + `events:write` | ingest, fan out, enqueue (`Idempotency-Key` supported) |
+| GET | `/v1/deliveries/:id` | API key + `deliveries:read` | status; supports `?wait=` long-poll and ETag |
+| GET | `/v1/deliveries/:id/attempts` | API key + `deliveries:read` | attempt history |
+| POST | `/v1/echo` | API key + `echo:write` | scratch endpoint used by the middleware labs |
+| POST | `/v1/webhooks/inbound/:source` | HMAC signature | provider-facing receiver with dedupe |
+| GET | `/v1/health` | none | dependency check |
+
 ## Interview labs
 
 Open **http://localhost:3000/labs** — a study guide covering every topic built in
 this repo, with one-click demos that run against the real Postgres and Redis.
 
 - 14 topics, each with key ideas, runnable snippets and an interview drill
-- 35 one-click demos: constraint probes, migration drift, layer-rule scan, EventEmitter
+- 38 one-click demos: constraint probes, migration drift, layer-rule scan, EventEmitter
   semantics, queue retries and dedupe, cron claim race, index before/after, query
   plans, log redaction and stream tail, audit writes, API-key auth, rate limiting,
-  raw-body hashing, HMAC verification, ETag revalidation
+  raw-body hashing, signed end-to-end delivery, inbound dedupe, ETag and long-poll
 - Progress is stored in localStorage
 
 Some demos need the worker running in a second terminal (`npm run worker`).

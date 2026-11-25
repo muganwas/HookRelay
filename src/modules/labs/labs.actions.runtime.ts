@@ -3,7 +3,7 @@ import http from 'node:http';
 import { Queue } from 'bullmq';
 import type { ActionDefinition, ActionResult } from './labs.types.js';
 import { pool } from '../../infra/db.js';
-import { config } from '../../config.js';
+import { config, selfBaseUrl } from '../../config.js';
 import { createRedisConnection } from '../../infra/queue.js';
 import { enqueueDelivery, getDeliveryQueue } from '../deliveries/delivery.job.js';
 import { getOpsQueue } from '../ops/ops.job.js';
@@ -664,7 +664,12 @@ export const runtimeActions: ActionDefinition[] = [
     label: 'Enqueue a healthy delivery',
     topicId: 'queues',
     requires: ['redis', 'postgres'],
-    run: () => enqueueScenario('ok', 'https://ok.test/hooks', 'Expect success on attempt 1.'),
+    run: () =>
+      enqueueScenario(
+        'ok',
+        `${selfBaseUrl}/labs/api/targets/200`,
+        'Expect success on attempt 1 — the worker really calls that URL.',
+      ),
   },
   {
     id: 'queues.enqueue-500',
@@ -674,7 +679,7 @@ export const runtimeActions: ActionDefinition[] = [
     run: () =>
       enqueueScenario(
         'retry',
-        'https://fail-500.test/hooks',
+        `${selfBaseUrl}/labs/api/targets/500`,
         'Expect 5 attempts with doubling delays, then dead.',
       ),
   },
@@ -686,7 +691,7 @@ export const runtimeActions: ActionDefinition[] = [
     run: () =>
       enqueueScenario(
         'dead',
-        'https://fail-400.test/hooks',
+        `${selfBaseUrl}/labs/api/targets/400`,
         'Expect dead on attempt 1: UnrecoverableError stops retrying.',
       ),
   },
