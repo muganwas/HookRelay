@@ -2,6 +2,8 @@ import { config } from './config.js';
 import { createApp } from './app.js';
 import { pool } from './infra/db.js';
 import { redis } from './infra/redis.js';
+import { closeDeliveryQueue } from './modules/deliveries/delivery.job.js';
+import { closeOpsQueue } from './modules/ops/ops.job.js';
 
 const server = createApp().listen(config.PORT, () => {
   console.log(`hookrelay listening on http://localhost:${config.PORT}`);
@@ -21,6 +23,7 @@ async function shutdown(reason: string): Promise<void> {
   forceExit.unref();
 
   await new Promise<void>((resolve) => server.close(() => resolve()));
+  await Promise.allSettled([closeDeliveryQueue(), closeOpsQueue()]);
   await Promise.allSettled([pool.end(), redis.quit()]);
 
   clearTimeout(forceExit);
