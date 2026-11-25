@@ -962,8 +962,113 @@ redis-cli XREAD COUNT 10 BLOCK 0 STREAMS logs:events '$'`,
     ],
   },
   {
-    id: 'capstone',
+    id: 'concurrency',
     order: 15,
+    phase: '11b',
+    title: 'Transactions & isolation',
+    status: 'live',
+    summary:
+      'Two sessions, one row, five outcomes. This is where Postgres stops being a place you store data and becomes a system with rules you have to respect.',
+    keyIdeas: [
+      '`READ COMMITTED` is the Postgres default: each **statement** gets a fresh snapshot. It prevents dirty reads, not lost updates.',
+      'Read-modify-write in application code is the lost-update bug. `value = value + 1` in one statement is atomic; reading into code and writing back is not.',
+      '`SELECT ... FOR UPDATE` turns the race into a wait. The lock is held until `COMMIT`, so short transactions are not optional.',
+      'Deadlocks come from inconsistent lock ordering. Postgres aborts one side with `40P01` after `deadlock_timeout` and expects you to retry.',
+      '`SERIALIZABLE` is optimistic: conflicts surface as `40001` and your code must retry the whole transaction, with backoff.',
+      '`REPEATABLE READ` gives one snapshot for the whole transaction, which is what reports need to be self-consistent.',
+    ],
+    interviewQuestions: [
+      'Two requests increment the same counter and one increment vanishes. Why, and how do you fix it?',
+      'What exactly does `SELECT ... FOR UPDATE` lock, and for how long?',
+      'How does a deadlock happen, how do you detect it, and how do you prevent it?',
+      'Under `SERIALIZABLE`, what error do you get and what must your code do about it?',
+      'Which isolation level would you pick for a multi-table report, and why?',
+      'Why can adding a retry loop make a hot row worse?',
+      'Why is `UPDATE ... SET value = value + 1` safer than reading the value and writing it back?',
+    ],
+    snippets: [
+      {
+        label: 'the lost update',
+        language: 'sql',
+        code: `-- session A                    -- session B
+BEGIN;                          BEGIN;
+SELECT value FROM counter;      -- 0
+                                SELECT value FROM counter; -- 0
+UPDATE counter SET value = 1;   -- read 0 + 1
+COMMIT;
+                                UPDATE counter SET value = 1; -- read 0 + 1
+                                COMMIT;
+-- final value: 1, not 2`,
+      },
+      {
+        label: 'serialize it with a row lock',
+        language: 'sql',
+        code: `BEGIN;
+SELECT value FROM counter WHERE key = $1 FOR UPDATE; -- B blocks here
+UPDATE counter SET value = $2 WHERE key = $1;
+COMMIT; -- B proceeds with the committed value`,
+      },
+      {
+        label: 'serializable needs a retry loop',
+        language: 'ts',
+        code: `for (let attempt = 1; attempt <= 3; attempt++) {
+  try {
+    await client.query('begin isolation level serializable');
+    // ...read, compute, write...
+    await client.query('commit');
+    return;
+  } catch (err) {
+    await client.query('rollback');
+    if ((err as { code?: string }).code !== '40001' || attempt === 3) throw err;
+    await sleep(50 * 2 ** attempt + Math.random() * 50);
+  }
+}`,
+      },
+      {
+        label: 'same reads, different levels',
+        language: 'sql',
+        code: `BEGIN ISOLATION LEVEL READ COMMITTED;
+SELECT value FROM counter;  -- 0
+-- another session commits value = 5
+SELECT value FROM counter;  -- 5   (new snapshot per statement)
+
+BEGIN ISOLATION LEVEL REPEATABLE READ;
+SELECT value FROM counter;  -- 0
+-- another session commits value = 5
+SELECT value FROM counter;  -- 0   (same snapshot)`,
+      },
+    ],
+    actions: [
+      {
+        id: 'concurrency.lost-update',
+        label: 'Lose an update',
+        description: 'Two transactions read 0 and both write 1; the final value is 1, with no error.',
+      },
+      {
+        id: 'concurrency.for-update',
+        label: 'Lock the row with FOR UPDATE',
+        description: 'The second reader blocks, then reads the committed value; both increments survive.',
+      },
+      {
+        id: 'concurrency.deadlock',
+        label: 'Trigger a deadlock',
+        description: 'Opposite lock order, one transaction aborted with 40P01.',
+      },
+      {
+        id: 'concurrency.serializable',
+        label: 'Force a serialization failure',
+        description: 'SERIALIZABLE returns 40001, then a clean retry succeeds.',
+      },
+      {
+        id: 'concurrency.isolation',
+        label: 'Compare isolation levels',
+        description: 'The same two reads under READ COMMITTED and REPEATABLE READ, side by side.',
+      },
+    ],
+  },
+  {
+    id: 'capstone',
+    order: 16,
     phase: '13',
     title: 'Capstone: operate it',
     status: 'live',
