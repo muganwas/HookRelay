@@ -19,7 +19,8 @@ const opsWorker = new Worker<OpsJobData>(OPS_QUEUE, processOpsJob, {
 });
 
 deliveryWorker.on('completed', (job) => {
-  console.log(`[${instance}] ✔ ${job.id} after ${job.attemptsMade + 1} attempts`);
+  // attemptsMade is already 1-based: it is 1 after the first successful attempt.
+  console.log(`[${instance}] ✔ ${job.id} after ${job.attemptsMade} attempt(s)`);
 });
 
 deliveryWorker.on('failed', (job, err) => {
