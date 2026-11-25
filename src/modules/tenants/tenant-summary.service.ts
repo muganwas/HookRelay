@@ -74,7 +74,7 @@ async function computeSummary(tenantId: string): Promise<TenantSummary | null> {
  * In-process single flight. Concurrent misses for the same key share one
  * database read; the waiters are told they were coalesced.
  *
- * This does not help across replicas — that needs a Redis lock (`SET NX PX`)
+ * This does not help across replicas: that needs a Redis lock (`SET NX PX`)
  * or a short random jitter on the TTL.
  */
 const inFlight = new Map<string, Promise<TenantSummary | null>>();

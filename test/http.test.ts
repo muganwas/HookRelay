@@ -147,7 +147,7 @@ describe('server-dependent demos', () => {
 
     assert.match(result.title, /409/);
     assert.equal(byLabel.get('HTTP status'), '409');
-    assert.equal(byLabel.get('x-powered-by'), '(absent — good)');
+    assert.equal(byLabel.get('x-powered-by'), '(absent: good)');
     assert.match(byLabel.get('body') ?? '', /CONFLICT/);
   });
 

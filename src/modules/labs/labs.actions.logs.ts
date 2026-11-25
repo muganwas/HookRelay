@@ -37,7 +37,7 @@ async function logsStructured(): Promise<ActionResult> {
   return {
     title: `${lines.length} lines written, 1 dropped`,
     summary:
-      'One JSON object per line. Redaction happens inside the logger, before the bytes are written — not at read time.',
+      'One JSON object per line. Redaction happens inside the logger, before the bytes are written: not at read time.',
     table: {
       columns: ['#', 'Rendered line'],
       rows: lines.map((line, index) => [index + 1, line]),
@@ -46,7 +46,7 @@ async function logsStructured(): Promise<ActionResult> {
       `Emitting at level "debug" produced nothing because this logger runs at "info". Level filtering is per logger, not per call.`,
       joined.includes('whsec_super_secret_value')
         ? 'LEAK: the secret reached the output.'
-        : 'Both `secret` and `apiKey` are `[redacted]` — the secret string never reaches the sink.',
+        : 'Both `secret` and `apiKey` are `[redacted]`: the secret string never reaches the sink.',
       'The Error is serialised as type/message/stack instead of collapsing to {}.',
       'Production sends these lines to stdout; the platform collects them. Files need rotation or they fill the disk.',
     ],
@@ -87,7 +87,7 @@ async function logsStream(): Promise<ActionResult> {
     },
     notes: [
       `Stream length is ${after}; the sink is capped at ~${LOG_STREAM_MAXLEN} with MAXLEN ~.`,
-      'The `~` means Redis trims at whole macro-nodes instead of exactly — cheaper, slightly imprecise.',
+      'The `~` means Redis trims at whole macro-nodes instead of exactly: cheaper, slightly imprecise.',
       'This is why Streams beat Pub/Sub for logs: entries persist, can be replayed, and support consumer groups.',
       `Newest three ids: ${ids.join(', ')}`,
     ],
@@ -152,7 +152,7 @@ async function logsAudit(): Promise<ActionResult> {
     },
     notes: [
       `Inserted id ${created.id} for entity ${entityId}.`,
-      'This is the first code path that writes to audit.audit_log — the table existed since migration 001.',
+      'This is the first code path that writes to audit.audit_log: the table existed since migration 001.',
       'No FK on tenant_id on purpose: deleting a tenant must not erase the evidence of what it did.',
       'Retention differs from app logs: days for logs, years for audit. That is why they are separate schemas.',
     ],

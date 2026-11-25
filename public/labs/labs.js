@@ -68,7 +68,7 @@ function decorate(text) {
         'abbr',
         {
           class: 'term',
-          title: `${entry.full} — ${entry.plain}`,
+          title: `${entry.full}: ${entry.plain}`,
           tabindex: '0',
           onclick: () => openGlossary(entry.term),
         },
@@ -237,7 +237,7 @@ function renderTopic(topic) {
     state.glossary.length > 0
       ? el('p', {
           class: 'term-hint',
-          text: 'Dotted-underline words are explained in the glossary — hover one, or press it to read the full entry.',
+          text: 'Dotted-underline words are explained in the glossary: hover one, or press it to read the full entry.',
         })
       : null,
   );
@@ -526,7 +526,7 @@ function renderTable(table) {
         {},
         row.map((cell) => {
           const isNumber = typeof cell === 'number';
-          const text = cell === null || cell === undefined ? '—' : String(cell);
+          const text = cell === null || cell === undefined ? 'n/a' : String(cell);
           return el('td', { class: isNumber ? 'num' : '', text });
         }),
       ),
@@ -578,7 +578,7 @@ function renderGlossary(query = '') {
             'dd',
             {},
             el('strong', { text: entry.full }),
-            el('span', { class: 'plain', text: ` — ${entry.plain}` }),
+            el('span', { class: 'plain', text: `: ${entry.plain}` }),
           ),
         ),
       );

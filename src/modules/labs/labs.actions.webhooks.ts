@@ -111,7 +111,7 @@ async function webhooksOutbound(): Promise<ActionResult> {
       ? view?.status === 'succeeded'
         ? 'Signed, delivered, verified and recorded'
         : `Delivery ended ${view?.status}`
-      : 'Still pending — is the worker running?',
+      : 'Still pending: is the worker running?',
     summary:
       'The worker signed the body, called this API back, the receiver verified the HMAC over the raw bytes, then deduped on the event id.',
     table: {
@@ -120,7 +120,7 @@ async function webhooksOutbound(): Promise<ActionResult> {
         ['endpoint', receiverUrl],
         ['delivery status', view?.status ?? '(missing)'],
         ['attempts recorded', attempts.length],
-        ['last response status', view?.lastResponseStatus ?? '—'],
+        ['last response status', view?.lastResponseStatus ?? 'n/a'],
         ['receiver row for event id', inbound.rows[0] ? 'present' : 'absent'],
         ['event id used for dedupe', created.eventId],
       ],
@@ -183,14 +183,14 @@ async function webhooksInbound(input: unknown): Promise<ActionResult> {
       columns: ['Case', 'Status', 'Meaning'],
       rows: [
         ['valid signature, new event id', fresh, '202 accepted'],
-        ['same event id again', replay, '200 duplicate — absorbed, not reprocessed'],
+        ['same event id again', replay, '200 duplicate: absorbed, not reprocessed'],
         ['body changed after signing', tampered, '401 signature mismatch'],
         ['timestamp 400s old', staleResult, '401 outside the 300s tolerance'],
         ['no signature header', unsigned, '401 missing signature header'],
       ],
     },
     notes: [
-      'Rejecting a replay matters because the provider retries on network errors — the same event WILL arrive twice.',
+      'Rejecting a replay matters because the provider retries on network errors: the same event WILL arrive twice.',
       'A 200 with duplicate:true is the receiver telling the provider "already handled, stop retrying".',
       'The tampered body keeps the original signature, which is exactly the attack a signature prevents.',
     ],
@@ -254,7 +254,7 @@ async function pollingLifecycle(): Promise<ActionResult> {
     notes: [
       `Delivery ${deliveryId} is "${view?.status ?? 'unknown'}" after ${view?.attempts ?? 0} attempt(s).`,
       'The long-poll short-circuits on terminal state, which is why 5s became a few milliseconds.',
-      'While it is still pending, the same call would hold the connection — that is the latency win over a 1s poll loop.',
+      'While it is still pending, the same call would hold the connection: that is the latency win over a 1s poll loop.',
       `ETag: ${etag ?? '(none)'}`,
       'Node fetch injects cache-control: no-cache when you send If-None-Match, so this uses node:http for that step.',
     ],
