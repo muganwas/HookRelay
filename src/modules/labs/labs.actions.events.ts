@@ -52,7 +52,7 @@ async function eventsOrder(): Promise<ActionResult> {
   const remaining = emitter.listenerCount('demo');
 
   return {
-    title: 'emit() is synchronous — the async listener is not',
+    title: 'emit() is synchronous: the async listener is not',
     summary:
       'Every listener ran inline before emit returned, except the async one, whose tail lands after the caller moved on.',
     table: {
@@ -61,7 +61,7 @@ async function eventsOrder(): Promise<ActionResult> {
     },
     notes: [
       `emit returned ${first}: true means at least one listener ran, not that it finished.`,
-      'B prints "start" before the caller continues and "end" after — emit never awaited it.',
+      'B prints "start" before the caller continues and "end" after: emit never awaited it.',
       `C ran once only: once() removed itself, so the second emit still had ${remaining} listeners.`,
       'If order matters for correctness, this is the wrong primitive. Use a queue with a single consumer.',
     ],
@@ -94,14 +94,14 @@ async function eventsError(): Promise<ActionResult> {
     table: {
       columns: ['Case', 'emit returned', 'Threw?', 'Handler saw'],
       rows: [
-        ['event with no listener', silentReturn, 'no', '—'],
-        ["'error' with no listener", 'did not return', 'yes', thrown ?? '—'],
-        ["'error' with a listener", handledReturn, 'no', captured ?? '—'],
+        ['event with no listener', silentReturn, 'no', 'n/a'],
+        ["'error' with no listener", 'did not return', 'yes', thrown ?? 'n/a'],
+        ["'error' with a listener", handledReturn, 'no', captured ?? 'n/a'],
       ],
     },
     notes: [
       "This is why every library documents `emitter.on('error')` as required: an unhandled error event crashes the caller's stack.",
-      'Every other event is fire-and-forget — `false` from emit simply means nothing was listening.',
+      'Every other event is fire-and-forget: `false` from emit simply means nothing was listening.',
       'Node also has `EventEmitter.errorMonitor` for observing errors without consuming them.',
     ],
   };
@@ -190,7 +190,7 @@ async function eventsAsyncCrash(): Promise<ActionResult> {
   return {
     title: survived
       ? 'The child survived (unexpected)'
-      : `The child process died — exit code ${child.code}`,
+      : `The child process died: exit code ${child.code}`,
     summary:
       'An async listener that throws is not caught by emit. It becomes an unhandled rejection, and Node 15+ terminates the process.',
     table: {
@@ -257,7 +257,7 @@ async function eventsWhereUsed(): Promise<ActionResult> {
       rows: hits.slice(0, 30).map(([file, line, text]) => [file, line, text]),
     },
     notes: [
-      'worker.ts uses `.on("completed" | "failed" | "error")` — BullMQ classes extend EventEmitter.',
+      'worker.ts uses `.on("completed" | "failed" | "error")`: BullMQ classes extend EventEmitter.',
       'api.ts uses `process.on("SIGINT" | "SIGTERM" | "unhandledRejection")`.',
       'http.Server emits `listening`/`request`/`close`; streams emit `data`/`end`; pg.Pool and ioredis emit `error`.',
       'Express is built on this too: `req.on("data")`, `res.on("finish")`.',

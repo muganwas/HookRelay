@@ -147,7 +147,7 @@ describe('server-dependent demos', () => {
 
     assert.match(result.title, /409/);
     assert.equal(byLabel.get('HTTP status'), '409');
-    assert.equal(byLabel.get('x-powered-by'), '(absent — good)');
+    assert.equal(byLabel.get('x-powered-by'), '(absent: good)');
     assert.match(byLabel.get('body') ?? '', /CONFLICT/);
   });
 
@@ -162,6 +162,137 @@ describe('server-dependent demos', () => {
     assert.equal(rows[1]?.[1], 304, 'conditional request did not return 304');
     assert.equal(rows[1]?.[3], 0, '304 must carry no body');
     assert.ok(Number(rows[0]?.[3]) > 0, 'first response should have a body');
+  });
+
+  it('logs.correlation finds the request it triggered', async () => {
+    const action = getLabAction('logs.correlation');
+    assert.ok(action);
+
+    const result = await action.run({ baseUrl });
+    const byKey = new Map((result.table?.rows ?? []).map((row) => [String(row[0]), String(row[1])]));
+
+    assert.match(result.title, /traceable line/);
+    assert.equal(byKey.get('path'), '/v1/health');
+    assert.equal(byKey.get('status'), '200');
+    assert.ok(byKey.get('requestId'), 'the entry must carry the request id');
+  });
+
+  it('middleware.auth rejects every failure mode with the right status', async () => {
+    const action = getLabAction('middleware.auth');
+    assert.ok(action);
+
+    const result = await action.run({ baseUrl });
+    const statuses = (result.table?.rows ?? []).map((row) => Number(row[1]));
+
+    assert.deepEqual(statuses, [200, 401, 401, 403, 401]);
+  });
+
+  it('middleware.validation returns 400 with structured issues', async () => {
+    const action = getLabAction('middleware.validation');
+    assert.ok(action);
+
+    const result = await action.run({ baseUrl });
+    const rows = result.table?.rows ?? [];
+    const statuses = rows.map((row) => Number(row[1]));
+
+    assert.deepEqual(statuses, [400, 400, 400, 400, 200]);
+    for (const row of rows.slice(0, 4)) {
+      assert.ok(String(row[2]).length > 0, 'each rejection must name the problem');
+    }
+  });
+
+  it('middleware.ratelimit allows the limit then returns 429', async () => {
+    const action = getLabAction('middleware.ratelimit');
+    assert.ok(action);
+
+    const result = await action.run({ baseUrl });
+    const statuses = (result.table?.rows ?? []).map((row) => Number(row[1]));
+
+    assert.equal(statuses.filter((status) => status === 200).length, 5);
+    assert.equal(statuses.filter((status) => status === 429).length, 2);
+    assert.match(result.title, /5 allowed, 2 rejected/);
+  });
+
+  it('middleware.rawbody hashes the exact bytes the client sent', async () => {
+    const action = getLabAction('middleware.rawbody');
+    assert.ok(action);
+
+    const result = await action.run({ baseUrl });
+    const byKey = new Map((result.table?.rows ?? []).map((row) => [String(row[0]), row[1]]));
+
+    assert.equal(byKey.get('match'), true);
+    assert.equal(Number(byKey.get('raw bytes received')), Number(byKey.get('raw bytes as sent')));
+  });
+
+  it('webhooks.inbound accepts a fresh signature and dedupes a replay', async () => {
+    const action = getLabAction('webhooks.inbound');
+    assert.ok(action);
+
+    const result = await action.run({ baseUrl });
+    const statuses = (result.table?.rows ?? []).map((row) => Number(row[1]));
+
+    assert.deepEqual(statuses, [202, 200, 401, 401, 401]);
+  });
+
+  it('cache.hit-miss computes once and then serves from cache', async () => {
+    const action = getLabAction('cache.hit-miss');
+    assert.ok(action);
+
+    const result = await action.run({ baseUrl });
+    const sources = (result.table?.rows ?? []).slice(0, 3).map((row) => String(row[1]));
+
+    assert.deepEqual(sources, ['db', 'cache', 'cache']);
+  });
+
+  it('cache.invalidate sends the next read back to the database', async () => {
+    const action = getLabAction('cache.invalidate');
+    assert.ok(action);
+
+    const result = await action.run({ baseUrl });
+    const rows = result.table?.rows ?? [];
+
+    assert.equal(rows[0]?.[1], 'db');
+    assert.equal(rows[1]?.[1], 'cache');
+    assert.equal(rows[3]?.[1], 'db');
+  });
+
+  it('cache.stampede collapses concurrent misses into one read', async () => {
+    const action = getLabAction('cache.stampede');
+    assert.ok(action);
+
+    const result = await action.run({ baseUrl });
+    assert.match(result.title, /1 database read/);
+  });
+
+  it('cache.penetration serves a negative entry for a missing tenant', async () => {
+    const action = getLabAction('cache.penetration');
+    assert.ok(action);
+
+    const result = await action.run({ baseUrl });
+    const rows = result.table?.rows ?? [];
+
+    assert.equal(rows.length, 5);
+    assert.ok(rows.every((row) => Number(row[1]) === 404));
+    assert.equal(rows[0]?.[2], 'db');
+    assert.ok(rows.slice(1).every((row) => row[2] === 'negative-cache'));
+  });
+
+  it('cache.staleness shows the cached read missing the write', async () => {
+    const action = getLabAction('cache.staleness');
+    assert.ok(action);
+
+    const result = await action.run({ baseUrl });
+    assert.match(result.title, /did not see the new row/);
+  });
+
+  it('cache.status reports a reachable, isolated cache', async () => {
+    const action = getLabAction('cache.status');
+    assert.ok(action);
+
+    const result = await action.run({});
+    const byKey = new Map((result.table?.rows ?? []).map((row) => [String(row[0]), row[1]]));
+
+    assert.equal(byKey.get('reachable'), true);
   });
 });
 

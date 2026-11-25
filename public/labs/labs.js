@@ -5,7 +5,82 @@ const state = {
   currentId: null,
   filter: '',
   reviewed: new Set(),
+  glossary: [],
+  termSeen: new Set(),
+  glossaryGroups: [],
 };
+
+let termIndex = null;
+let termPattern = null;
+
+const TERM_ESCAPE = /[.*+?^${}()|[\]\\]/g;
+
+/** Builds one alternation from every linkable form, longest first so `long-poll` beats `polling`. */
+function buildTermIndex(groups) {
+  state.glossaryGroups = groups;
+  state.glossary = groups.flatMap((group) => group.entries);
+
+  const index = new Map();
+  const forms = [];
+  for (const entry of state.glossary) {
+    if (entry.autoLink === false) continue;
+    for (const form of [entry.term, ...(entry.match ?? [])]) {
+      if (form.length < 3) continue;
+      const key = form.toLowerCase();
+      if (!index.has(key)) index.set(key, { entry, form });
+      forms.push(form);
+    }
+  }
+
+  forms.sort((a, b) => b.length - a.length);
+  termIndex = index;
+  termPattern =
+    forms.length === 0
+      ? null
+      : new RegExp(
+          `(?<![A-Za-z0-9_])(${forms.map((form) => form.replace(TERM_ESCAPE, '\\$&')).join('|')})(?![A-Za-z0-9_])`,
+          'gi',
+        );
+}
+
+/** Wraps the first mention of each term per topic in a hoverable explanation. */
+function decorate(text) {
+  const source = String(text);
+  if (!termPattern || source.length === 0) return document.createTextNode(source);
+
+  const fragment = document.createDocumentFragment();
+  let cursor = 0;
+
+  for (const match of source.matchAll(termPattern)) {
+    const hit = termIndex.get(match[0].toLowerCase());
+    if (!hit) continue;
+    const { entry, form } = hit;
+    // Acronyms must match case exactly: `id` should not explain `ID`.
+    if (entry.caseSensitive && match[0] !== form) continue;
+    if (state.termSeen.has(entry.term)) continue;
+
+    const index = match.index ?? 0;
+    if (index > cursor) fragment.append(document.createTextNode(source.slice(cursor, index)));
+
+    state.termSeen.add(entry.term);
+    fragment.append(
+      el(
+        'abbr',
+        {
+          class: 'term',
+          title: `${entry.full}: ${entry.plain}`,
+          tabindex: '0',
+          onclick: () => openGlossary(entry.term),
+        },
+        match[0],
+      ),
+    );
+    cursor = index + match[0].length;
+  }
+
+  if (cursor < source.length) fragment.append(document.createTextNode(source.slice(cursor)));
+  return fragment;
+}
 
 function loadReviewed() {
   try {
@@ -60,18 +135,18 @@ function inline(text) {
 
   for (const match of source.matchAll(tokenPattern)) {
     const index = match.index ?? 0;
-    if (index > cursor) fragment.append(document.createTextNode(source.slice(cursor, index)));
+    if (index > cursor) fragment.append(decorate(source.slice(cursor, index)));
 
     const token = match[0];
     if (token.startsWith('`')) {
       fragment.append(el('code', { class: 'inline', text: token.slice(1, -1) }));
     } else {
-      fragment.append(el('strong', { text: token.slice(2, -2) }));
+      fragment.append(el('strong', {}, decorate(token.slice(2, -2))));
     }
     cursor = index + token.length;
   }
 
-  if (cursor < source.length) fragment.append(document.createTextNode(source.slice(cursor)));
+  if (cursor < source.length) fragment.append(decorate(source.slice(cursor)));
   return fragment;
 }
 
@@ -142,6 +217,7 @@ function selectTopic(id, updateHash) {
 function renderTopic(topic) {
   const main = document.getElementById('main');
   main.replaceChildren();
+  state.termSeen = new Set();
 
   const head = el(
     'header',
@@ -157,7 +233,13 @@ function renderTopic(topic) {
       el('span', { class: 'pill', text: `${topic.actions.length} demo${topic.actions.length === 1 ? '' : 's'}` }),
     ),
     el('h1', { text: topic.title }),
-    el('p', { class: 'summary', text: topic.summary }),
+    el('p', { class: 'summary' }, inline(topic.summary)),
+    state.glossary.length > 0
+      ? el('p', {
+          class: 'term-hint',
+          text: 'Dotted-underline words are explained in the glossary: hover one, or press it to read the full entry.',
+        })
+      : null,
   );
 
   const ideas = el(
@@ -294,7 +376,7 @@ function renderActionCard(topic, action, registry) {
   registry.set(action.id, { button, slot });
 
   button.addEventListener('click', async () => {
-    if (action.heavy && !window.confirm(`${action.label} is heavy (seeds ~100k rows). Continue?`)) {
+    if (action.heavy && !window.confirm(`${action.label} is heavy and may take a few seconds. Continue?`)) {
       return;
     }
     await execute(topic.id, action, slot, button);
@@ -444,7 +526,7 @@ function renderTable(table) {
         {},
         row.map((cell) => {
           const isNumber = typeof cell === 'number';
-          const text = cell === null || cell === undefined ? '—' : String(cell);
+          const text = cell === null || cell === undefined ? 'n/a' : String(cell);
           return el('td', { class: isNumber ? 'num' : '', text });
         }),
       ),
@@ -452,6 +534,62 @@ function renderTable(table) {
   );
 
   return el('table', {}, head, body);
+}
+
+/* ---------------- glossary ---------------- */
+
+function openGlossary(term) {
+  const dialog = document.getElementById('glossary');
+  const filter = document.getElementById('glossary-filter');
+
+  filter.value = term ?? '';
+  renderGlossary(filter.value);
+  if (!dialog.open) dialog.showModal();
+
+  filter.focus();
+  filter.select();
+}
+
+function renderGlossary(query = '') {
+  const body = document.getElementById('glossary-body');
+  body.replaceChildren();
+
+  const needle = query.trim().toLowerCase();
+  const matches = (entry) =>
+    needle === '' || `${entry.term} ${entry.full} ${entry.plain}`.toLowerCase().includes(needle);
+
+  let shown = 0;
+
+  for (const group of state.glossaryGroups) {
+    const entries = group.entries.filter(matches);
+    if (entries.length === 0) continue;
+
+    const list = el('dl', {});
+    for (const entry of entries) {
+      shown += 1;
+      list.append(
+        el(
+          'div',
+          {
+            class: `glossary-entry${needle && entry.term.toLowerCase() === needle ? ' hit' : ''}`,
+          },
+          el('dt', { text: entry.term }),
+          el(
+            'dd',
+            {},
+            el('strong', { text: entry.full }),
+            el('span', { class: 'plain', text: `: ${entry.plain}` }),
+          ),
+        ),
+      );
+    }
+
+    body.append(el('section', { class: 'glossary-group' }, el('h3', { text: group.label }), list));
+  }
+
+  if (shown === 0) {
+    body.append(el('p', { class: 'glossary-empty', text: 'No term matches that search.' }));
+  }
 }
 
 /* ---------------- boot ---------------- */
@@ -475,6 +613,30 @@ async function boot() {
       if (topic) renderTopic(topic);
     }
   });
+
+  document.getElementById('open-glossary').addEventListener('click', () => openGlossary());
+  document.getElementById('close-glossary').addEventListener('click', () => {
+    document.getElementById('glossary').close();
+  });
+  document.getElementById('glossary-filter').addEventListener('input', (event) => {
+    renderGlossary(event.target.value);
+  });
+  // Clicking the backdrop closes the dialog, like every other modal.
+  document.getElementById('glossary').addEventListener('click', (event) => {
+    if (event.target === event.currentTarget) event.currentTarget.close();
+  });
+
+  // The glossary is optional: if it fails, the labs still work, just without
+  // hover explanations.
+  try {
+    const glossaryResponse = await fetch('/labs/api/glossary');
+    if (glossaryResponse.ok) {
+      const payload = await glossaryResponse.json();
+      buildTermIndex(payload.groups ?? []);
+    }
+  } catch {
+    buildTermIndex([]);
+  }
 
   try {
     const response = await fetch('/labs/api/topics');

@@ -1,11 +1,13 @@
 import type { RequestHandler } from 'express';
 import { ConflictError, NotFoundError, ValidationError } from '../../shared/errors.js';
 import { topics } from './labs.topics.js';
+import { glossaryByArea } from './labs.glossary.js';
 import { actionsForTopic, getLabAction } from './labs.actions.js';
 import type { ActionResult, LabTopic } from './labs.types.js';
 
 export type LabsController = {
   listTopics: RequestHandler;
+  listGlossary: RequestHandler;
   runAction: RequestHandler;
   probeError: RequestHandler;
 };
@@ -31,6 +33,10 @@ export function createLabsController(): LabsController {
       // No timestamp here on purpose: a volatile field would change the ETag
       // on every request and defeat conditional polling.
       res.json({ topics: topics.map(withActions) });
+    }) satisfies RequestHandler,
+
+    listGlossary: (async (_req, res) => {
+      res.json({ groups: glossaryByArea() });
     }) satisfies RequestHandler,
 
     runAction: (async (req, res) => {

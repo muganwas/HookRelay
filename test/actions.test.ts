@@ -4,8 +4,29 @@ import { getLabAction, labActions } from '../src/modules/labs/labs.actions.js';
 import type { ActionResult } from '../src/modules/labs/labs.types.js';
 import { closeResources } from './helpers.js';
 
-/** These two need a listening server, so they are covered in http.test.ts. */
-const SERVER_DEPENDENT = new Set(['middleware.error-contract', 'polling.etag']);
+/** These need a listening server, so they are covered in http.test.ts. */
+const SERVER_DEPENDENT = new Set([
+  'middleware.error-contract',
+  'middleware.auth',
+  'middleware.validation',
+  'middleware.ratelimit',
+  'middleware.rawbody',
+  'polling.etag',
+  'logs.correlation',
+  'webhooks.inbound',
+  // These two need the BullMQ worker running as well, so they are verified
+  // against the compose stack rather than in the host test process.
+  'webhooks.outbound',
+  'polling.lifecycle',
+  // Cache demos read an in-process computation counter, so they must run
+  // against this process, not the container.
+  'cache.hit-miss',
+  'cache.invalidate',
+  'cache.stampede',
+  'cache.penetration',
+  'cache.staleness',
+  'cache.status',
+]);
 
 after(closeResources);
 
@@ -152,6 +173,124 @@ describe('infra: dependencies answer', () => {
 
     assert.match(byLabel.get('Postgres') ?? '', /PostgreSQL/);
     assert.match(byLabel.get('Redis version') ?? '', /^\d+\./);
+  });
+});
+
+describe('concurrency: isolation behaviour', () => {
+  it('loses an update under read committed', async () => {
+    const result = await mustGet('concurrency.lost-update').run({});
+    const rows = tableOf(result).rows;
+    const final = Number(rows.find((row) => String(row[0]) === 'COMMIT' && String(row[2]) === 'done')?.[3] ?? -1);
+
+    assert.match(result.title, /vanished/);
+    assert.equal(final, 1, 'expected the lost update to leave 1');
+  });
+
+  it('keeps both increments with FOR UPDATE', async () => {
+    const result = await mustGet('concurrency.for-update').run({});
+    const byKey = new Map(tableOf(result).rows.map((row) => [String(row[0]), String(row[1])]));
+
+    assert.match(result.title, /survived/);
+    assert.equal(byKey.get('final value'), '2');
+    assert.equal(byKey.get('B was still blocked after 250 ms'), 'true');
+  });
+
+  it('detects a deadlock with 40P01', async () => {
+    const result = await mustGet('concurrency.deadlock').run({});
+    const outcomes = tableOf(result).rows.map((row) => String(row[3]));
+
+    assert.ok(outcomes.includes('40P01'), `expected a deadlock victim, got ${outcomes.join(', ')}`);
+    assert.match(result.title, /aborted one transaction/);
+  });
+
+  it('forces a serialization failure then succeeds on retry', async () => {
+    const result = await mustGet('concurrency.serializable').run({});
+    const byKey = new Map(tableOf(result).rows.map((row) => [String(row[0]), String(row[1])]));
+
+    assert.equal(byKey.get('B first attempt'), '40001');
+    assert.equal(byKey.get('final value'), '2');
+    assert.match(result.title, /retry succeeded/);
+  });
+
+  it('shows different snapshots per isolation level', async () => {
+    const result = await mustGet('concurrency.isolation').run({});
+    const rows = tableOf(result).rows;
+
+    const readCommitted = rows.find((row) => String(row[0]) === 'READ COMMITTED');
+    const repeatableRead = rows.find((row) => String(row[0]) === 'REPEATABLE READ');
+
+    assert.equal(readCommitted?.[3], true, 'read committed must see the change');
+    assert.equal(repeatableRead?.[3], false, 'repeatable read must keep its snapshot');
+  });
+});
+
+describe('capstone: operational signals', () => {
+  it('reads live system state', async () => {
+    const result = await mustGet('capstone.readout').run({});
+    const labels = tableOf(result).rows.map((row) => String(row[0]));
+
+    assert.ok(labels.includes('workers connected'));
+    assert.ok(labels.includes('queue waiting'));
+    assert.ok(labels.includes('deliveries by status'));
+    assert.ok(labels.includes('pg pool total / idle / waiting'));
+  });
+
+  it('fails fast against a dead redis and maps the failure modes', async () => {
+    const result = await mustGet('capstone.redis-down').run({});
+    const rows = tableOf(result).rows;
+
+    assert.match(result.title, /failed fast|unexpectedly connected/);
+    assert.ok(
+      rows.some((row) => String(row[2]).includes('fails OPEN')),
+      'the matrix must call out fail-open behaviour',
+    );
+  });
+});
+
+describe('logs: structured output', () => {
+  it('redacts secrets before writing and drops below-level lines', async () => {
+    const result = await mustGet('logs.structured').run({});
+    const rows = tableOf(result).rows;
+    const text = rows.map((row) => String(row[1])).join('\n');
+
+    assert.equal(rows.length, 2, 'debug must be filtered at level info');
+    assert.match(text, /\[redacted\]/);
+    assert.doesNotMatch(text, /whsec_super_secret_value/);
+    assert.doesNotMatch(text, /hr_live_abc123/);
+  });
+
+  it('serialises errors with a message and stack', async () => {
+    const result = await mustGet('logs.structured').run({});
+    const text = tableOf(result).rows.map((row) => String(row[1])).join('\n');
+
+    assert.match(text, /"type":"Error"/);
+    assert.match(text, /upstream returned 503/);
+  });
+});
+
+describe('logs: redis stream', () => {
+  it('appends entries and reads them back', async () => {
+    const result = await mustGet('logs.stream').run({});
+    const rows = tableOf(result).rows;
+
+    assert.ok(rows.length >= 3, `expected at least 3 entries, got ${rows.length}`);
+    assert.ok(rows.some((row) => row[2] === 'lab.stream.sample'));
+
+    const appended = Number(/^(\d+) entries/.exec(result.title)?.[1] ?? 0);
+    assert.ok(appended >= 3, `expected >= 3 appended, title said ${result.title}`);
+
+    for (const row of rows) assert.match(String(row[0]), /^\d+-\d+$/);
+  });
+});
+
+describe('logs: audit trail', () => {
+  it('writes a business record to audit.audit_log', async () => {
+    const result = await mustGet('logs.audit').run({});
+    const rows = tableOf(result).rows;
+
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0]?.[1], 'endpoint.created');
+    assert.equal(rows[0]?.[2], 'user:lab');
   });
 });
 

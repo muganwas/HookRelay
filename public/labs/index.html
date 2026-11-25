@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>HookRelay — Interview Labs</title>
+    <title>HookRelay: Interview Labs</title>
     <link rel="stylesheet" href="/labs/labs.css" />
   </head>
   <body>
@@ -30,12 +30,28 @@
         <nav id="topic-nav" aria-label="Topics"></nav>
 
         <div class="sidebar-foot">
+          <button id="open-glossary" type="button" class="link-button">Glossary: every abbreviation</button>
           <button id="reset-progress" type="button" class="link-button">Reset progress</button>
         </div>
       </aside>
 
       <main id="main" class="main" tabindex="-1"></main>
     </div>
+
+    <dialog id="glossary" class="glossary-dialog" aria-labelledby="glossary-title">
+      <header class="glossary-head">
+        <div>
+          <h2 id="glossary-title">Glossary</h2>
+          <p>Every abbreviation, acronym and short form used in these labs, in plain words.</p>
+        </div>
+        <button id="close-glossary" type="button" class="btn subtle">Close</button>
+      </header>
+      <label class="search glossary-search">
+        <span class="sr-only">Search the glossary</span>
+        <input id="glossary-filter" type="search" placeholder="Search a term, e.g. TTL…" autocomplete="off" />
+      </label>
+      <div id="glossary-body" class="glossary-body"></div>
+    </dialog>
 
     <script type="module" src="/labs/labs.js"></script>
   </body>

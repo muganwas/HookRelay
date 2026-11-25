@@ -1,4 +1,4 @@
-﻿import type { LabTopic } from './labs.types.js';
+import type { LabTopic } from './labs.types.js';
 
 export const topics: LabTopic[] = [
   {
@@ -8,13 +8,13 @@ export const topics: LabTopic[] = [
     title: 'Docker & Bootstrap',
     status: 'live',
     summary:
-      'Postgres and Redis run as containers with healthchecks and named volumes. The health endpoint proves dependencies, not just liveness.',
+      'Postgres and Redis run in containers started from images. The health check reports what is actually reachable, not just whether the process is still running.',
     keyIdeas: [
-      'A named volume outlives the container; `docker compose down -v` is the only honest test of a migration.',
-      'A healthcheck in compose is what lets `docker compose ps` say "healthy" instead of just "up".',
-      '`/v1/health` returns 503 and names the failing dependency â€” it measures, it does not report a cached flag.',
-      '`pool.max = 10` is deliberately too small for 4 worker replicas: you will hit it and measure it.',
-      '`process.loadEnvFile` is built into Node; the migration CLI needs its own loader because it is a separate process.',
+      'A **named volume** keeps data when a container is deleted. `docker compose down -v` removes it too, which makes it the only honest way to test a setup from scratch.',
+      'A **healthcheck** is a command the runtime keeps repeating. It is what turns "up" into "healthy" in `docker compose ps`.',
+      '`/v1/health` tries both dependencies and answers 503 when one fails, naming which one. It measures now instead of repeating a stored answer.',
+      'The database connection pool is capped at 10 connections on purpose. Four worker replicas will run out, and you will see what that looks like instead of reading about it.',
+      'A container is stopped with `SIGTERM`, the "please finish" signal that a graceful shutdown listens for. Node can read `.env` by itself with `process.loadEnvFile`; the migration tool is a separate program and needs its own loader, which is why `dotenv` is installed.',
     ],
     interviewQuestions: [
       'What is the difference between liveness and readiness?',
@@ -80,14 +80,14 @@ export const config = parsed.data;`,
     title: 'Backend Architecture',
     status: 'live',
     summary:
-      'One direction of dependency: routes -> controller -> service -> repository -> infra. The composition root is the only place that knows every layer.',
+      'Code is organised in layers with one rule: dependencies point one way. A route receives the request, a service holds the logic, infrastructure owns the database. Only one file knows about all of them.',
     keyIdeas: [
-      '`pg` lives only in `infra/`. A service must be unit-testable with no database.',
-      '`express` may appear at runtime only in `*.routes.ts`; controllers import `RequestHandler` as `import type`, which erases at compile time.',
-      'Routes are the HTTP adapter, so importing `Router` there is correct â€” the rule bans express in services, not in routes.',
-      'The error handler must take four arguments and be registered last; Express detects it by arity.',
-      '`createApp()` is a composition root: swap a dependency there and nothing else changes.',
-      '`Promise.allSettled` in the health service, not `Promise.all` â€” `all` short-circuits and loses the other result.',
+      'The database driver (`pg`) is imported in one folder, `infra/`. A service that imports it directly cannot be tested without a database.',
+      'Express is imported at runtime only inside `*.routes.ts`. Controllers use `import type`, which disappears when the code is compiled.',
+      'A route file is allowed to import Express because that file **is** the adapter to HTTP. The rule bans Express in business logic, not in the adapter.',
+      'The error handler must accept four parameters and be registered last. Express counts the parameters to recognise it as an error handler.',
+      '`createApp()` is the **composition root**: the one place where real dependencies are wired in. Swap a fake database there and nothing else changes.',
+      'The health check uses `Promise.allSettled`, not `Promise.all`. `all` stops at the first failure and throws away the other answer.',
     ],
     interviewQuestions: [
       'Where does a transaction that spans two repositories live, and why not inside a repository?',
@@ -149,15 +149,15 @@ export const config = parsed.data;`,
     title: 'Node.js Events (EventEmitter)',
     status: 'live',
     summary:
-      "EventEmitter is Node's in-process pub/sub primitive: synchronous, non-durable, and the machinery under our HTTP server, the worker, pg and ioredis.",
+      "An EventEmitter is Node's way of letting one part of a program announce that something happened, and immediately calling the functions that asked about it. It is fast, it stays inside one process and one turn of the event loop, and it is what runs underneath the HTTP server, the worker and the database driver.",
     keyIdeas: [
-      '`emit()` is synchronous. Every listener runs inline before it returns — an `async` listener returns a promise that `emit` does **not** await.',
-      'A rejection inside an async listener is not caught by the emitter. On Node 15+ it becomes an unhandled rejection and terminates the process.',
-      "`'error'` is the one special event: with no listener, `emit('error')` throws. Every other event with no listener is a silent no-op returning `false`.",
-      'Listeners run in registration order; `once()` auto-removes after firing; `prependListener` jumps the queue.',
-      'Node warns at 11 listeners per event. A listener added per request and never removed is the classic leak — fix the leak, not the threshold.',
-      'It is **in-process only**: invisible to other replicas, no retry, lost on crash. That is precisely why delivery work goes through BullMQ instead of `emitter.emit`.',
-      'Four different things get called "events": EventEmitter (in-process, sync), EventTarget (in-process, DOM-style), a message queue (cross-process, durable), and a webhook (cross-company, over HTTP).',
+      '`emit()` runs every listener immediately, one after another. An `async` listener returns a promise, and `emit` does **not** wait for it.',
+      'If an async listener throws, nobody is waiting to catch it. Since Node 15 that counts as an unhandled rejection and ends the process.',
+      "`'error'` is the special case: with no listener attached, emitting an error throws. Any other event with no listener is simply ignored and returns `false`.",
+      'Listeners run in the order they were added. `once()` removes itself after firing, and `prependListener` puts a listener at the front.',
+      'Node warns at 11 listeners on one event. If a request adds a listener and never removes it, that warning is a real leak: fix the leak, do not raise the limit.',
+      'It works only **inside one process**: other replicas cannot hear it, nothing is retried, and a crash loses the event. That is exactly why delivery work goes through a queue instead.',
+      "Four different things get called events: an EventEmitter (inside one process, immediate), an EventTarget (same idea, browser style), a message queue (across processes, durable), and a webhook (across companies, over HTTP).",
     ],
     interviewQuestions: [
       'Is `emit()` synchronous or asynchronous, and what does that mean for error handling?',
@@ -169,7 +169,7 @@ export const config = parsed.data;`,
     ],
     snippets: [
       {
-        label: 'emit is synchronous — the async listener is not awaited',
+        label: 'emit is synchronous: the async listener is not awaited',
         language: 'ts',
         code: `emitter.on('demo', () => trace.push('A'));
 emitter.on('demo', async () => {
@@ -254,14 +254,14 @@ await queue.add('deliver', delivery, { jobId: delivery.id });`,
     title: 'PostgreSQL Schemas',
     status: 'live',
     summary:
-      'Three schemas (app / audit / ops) split by permission and retention. Constraints are the contract; the database enforces it, not the application.',
+      'Three schemas separate data by purpose: `app` for live business data, `audit` for history, `ops` for job bookkeeping. The rules live in the database, so a bug in the application cannot break them.',
     keyIdeas: [
-      '`unique (tenant_id, idempotency_key)` ignores NULLs by default, so "no key" means "always a new event".',
-      '`timestamptz` stores an 8-byte UTC instant and converts using the session timezone â€” it stores no timezone text.',
-      '`text` + `CHECK` beats a native enum when the value set evolves: dropping a check is an ordinary migration.',
-      'No FK on `audit.audit_log.tenant_id`: audit must outlive its subject.',
-      'External ids are UUIDs (unguessable); internal high-volume ids are `bigint` (8 bytes, sequential inserts).',
-      'Every PRIMARY KEY and UNIQUE constraint silently creates a B-tree index. FK columns get none.',
+      'A UNIQUE constraint on `(tenant_id, idempotency_key)` treats NULL as "no value", so rows without a key never collide. That is why "no key" means "always a new event".',
+      '`timestamptz` stores one instant in UTC and converts it when read. It does not store the timezone as text.',
+      'A `text` column plus a CHECK constraint is easier to change than a native enum: you can add or remove allowed values with an ordinary migration.',
+      'The audit table deliberately has no foreign key: a record of what happened must survive even if the tenant is deleted.',
+      'Public ids are UUIDs because they cannot be guessed. Internal, high-volume ids are `bigint` because they are 8 bytes and insert in order.',
+      'Every primary key and unique rule quietly creates a B-tree index. A foreign-key column gets none: that is the one you have to add yourself.',
     ],
     interviewQuestions: [
       'How many rows may share a NULL idempotency key, and why?',
@@ -325,14 +325,14 @@ values (gen_random_uuid(), $1, 'order.created', '{}', null);`,
     title: 'Migrations',
     status: 'live',
     summary:
-      'The ledger table is what makes a folder of SQL into a versioned schema. Zero-downtime changes are three separate deploys, not one clever statement.',
+      'A migration is one recorded change to the database structure. The table of applied migrations is what turns a folder of SQL files into a versioned schema, and a big change is split into several safe deploys instead of one clever statement.',
     keyIdeas: [
-      '`pgmigrations` records which migration ran and when â€” the schema has a version, not just a shape.',
-      'Expand/contract: add the new column + a sync trigger, backfill, then contract. Three deploys, two of them code-only.',
-      '`RENAME COLUMN` takes milliseconds and is still a production incident: old processes keep asking for the old name.',
-      '`CREATE INDEX CONCURRENTLY` cannot run inside a transaction, and a failed build leaves an invalid index behind.',
-      '`NOT VALID` then `VALIDATE` avoids a long exclusive lock when adding a CHECK or FK.',
-      '`DEFAULT 0` is a catalog change; `DEFAULT now()` rewrites the whole table.',
+      '`pgmigrations` records which migration ran and when. The schema has a version, not just a shape.',
+      'Expand, then contract: add the new column and keep both in sync, fill in the existing rows, move readers over, and only then delete the old column. That pattern is called expand/contract: three deploys, two of them code-only.',
+      '`RENAME COLUMN` takes milliseconds and can still break production: old processes are still asking for the old name.',
+      '`CREATE INDEX CONCURRENTLY` builds an index without blocking writes. It cannot run inside a transaction, and a failed build leaves an invalid index you must drop.',
+      'Add a rule as `NOT VALID` first, then `VALIDATE` it. That avoids holding a long exclusive lock while every existing row is checked.',
+      'A `DEFAULT 0` is a cheap catalog change. `DEFAULT now()` has to write a value into every existing row, which rewrites the whole table.',
     ],
     interviewQuestions: [
       'Why is a folder of .sql files worse than a migrations table, concretely?',
@@ -404,14 +404,14 @@ where d.id = b.id;`,
     title: 'Git: branches, PRs, merges',
     status: 'live',
     summary:
-      'One short-lived branch per phase, merged with --no-ff so the branch stays visible. Revert for shared history, reset only locally.',
+      'Each piece of work gets its own short-lived branch and is merged with `--no-ff`, so history still shows that a branch existed. Undo shared work with `revert`, and keep `reset` for your own machine.',
     keyIdeas: [
-      '`--no-ff` keeps a merge commit, so the branch is readable in history later.',
-      '`git log --first-parent` shows trunk history without wading through side branches.',
-      '`git log --all` includes tooling refs (agent checkpoints), which can look like corrupt history.',
-      'Squash keeps main clean but coarsens `git blame` and `git bisect`.',
-      '`revert` is a new commit; `reset --hard` moves the pointer and erases commits â€” never on a pushed branch.',
-      '`git bisect run <command>` automates the search using any command that exits non-zero on failure.',
+      '`--no-ff` (no fast-forward) always creates a merge commit. You keep a visible record of the branch and the commits it brought in.',
+      '`git log --first-parent` follows the trunk and skips side branches, which is the readable history.',
+      '`git log --all` also shows refs created by tools, such as editor checkpoints. Extra branches there are not corruption.',
+      'A **squash** keeps the main branch tidy but makes `git blame` less precise and `git bisect` coarser.',
+      '`revert` makes a new commit that undoes the change. `reset --hard` moves the branch and throws commits away, so never do it on a pushed branch.',
+      '`git bisect run <command>` finds the bad commit by halving history, using your command as the judge.',
     ],
     interviewQuestions: [
       'Merge vs rebase: what does each do to history, and when is rebase the wrong choice?',
@@ -448,7 +448,7 @@ git revert -m 1 <merge-sha>`,
     actions: [
       {
         id: 'git.graph',
-        label: 'Read this repoâ€™s history',
+        label: 'Read this repo’s history',
         description: 'Runs read-only git commands: first-parent graph, branches, working tree status.',
       },
     ],
@@ -460,14 +460,16 @@ git revert -m 1 <merge-sha>`,
     title: 'Middleware',
     status: 'live',
     summary:
-      'Order is behaviour. requestId first so every later log line has it; the error handler last and with four arguments.',
+      'Middleware is code that runs around the handler: before it, after it, or instead of it. The order is the behaviour: an id first means later log lines can use it, and the error handler goes last.',
     keyIdeas: [
-      'Order: requestId -> logger -> auth -> validate -> handler -> notFound -> errorHandler.',
-      'Swapping requestId after the logger means the log line has no correlation id.',
-      'Express 5 forwards rejected promises from async handlers automatically; Express 4 did not.',
-      '`res.headersSent` guard: once headers are flushed, delegating to `next(err)` is the only safe move.',
-      'Raw body for HMAC must be captured before JSON parsing (`express.json({ verify })`).',
-      '`trust proxy` decides whether `req.ip` is the client or your load balancer.',
+      'The order here: request id, logging, authentication, validation, handler, 404, error handler.',
+      'Register the logger after the request id. The other way round, every log line is missing the id that ties it to a request.',
+      'Express 5 catches a rejected promise from an async handler and passes it to the error handler. Express 4 did not, which is why older code wraps everything in try/catch.',
+      'Once the response headers are sent you cannot send a different status. Check `res.headersSent` and hand the error on instead.',
+      'To verify a signature you need the **raw bytes** exactly as they arrived, so keep the body before JSON parsing turns it into an object.',
+      'API keys are stored as a SHA-256 hash, never as plain text. 401 means "I do not know this key"; 403 means "I know it, but it lacks this permission".',
+      'The rate limiter counts per API key, not per tenant, so one noisy key cannot use up the whole tenant allowance.',
+      '`trust proxy` decides whether `req.ip` is the real client or your load balancer. Get it wrong and every client looks like one IP.',
     ],
     interviewQuestions: [
       'Name the middleware order and what breaks if two are swapped.',
@@ -507,6 +509,26 @@ app.use(errorHandler);                   // 4. must be last, 4 args`,
         label: 'Trigger a real 409',
         description: 'HTTP-requests this server and shows the exact status, body and requestId.',
       },
+      {
+        id: 'middleware.auth',
+        label: 'Authenticate with an API key',
+        description: 'Issues real keys and shows valid, missing, unknown, wrong-scope and revoked cases.',
+      },
+      {
+        id: 'middleware.validation',
+        label: 'Validate a body',
+        description: 'Sends four invalid bodies and one valid one; each failure returns structured issues.',
+      },
+      {
+        id: 'middleware.ratelimit',
+        label: 'Exceed the rate limit',
+        description: 'Fires limit+2 requests on one key and shows 429 with Retry-After.',
+      },
+      {
+        id: 'middleware.rawbody',
+        label: 'Prove raw bytes are captured',
+        description: 'Compares the client hash with the server hash over an oddly formatted body.',
+      },
     ],
   },
   {
@@ -516,17 +538,17 @@ app.use(errorHandler);                   // 4. must be last, 4 args`,
     title: 'Queues (BullMQ)',
     status: 'live',
     summary:
-      'At-least-once delivery with retries, exponential backoff and a dead-letter state. `jobId` gives idempotency; `UnrecoverableError` stops pointless retries.',
+      'A queue lets the request finish before the slow work happens. Jobs are retried with longer and longer waits, and eventually end up in a dead-letter state. Because a job can run more than once, the work has to be safe to repeat.',
     keyIdeas: [
-      'BullMQ gives at-least-once. Exactly-once is impossible, so the consumer must be idempotent.',
-      '`jobId = deliveryId` makes enqueueing idempotent: a second add with the same id is ignored.',
-      '4xx is deterministic â€” retrying a 401 nine times is pure waste. Throw `UnrecoverableError`.',
-      '`failed` fires on every failed attempt; check `job.attemptsMade >= job.opts.attempts` for the terminal state.',
-      'Worker connections need `maxRetriesPerRequest: null`; blocking reads must not be capped.',
-      'Graceful shutdown (`worker.close()`) waits for in-flight jobs. `process.exit()` leaves them active until the stalled check re-delivers them.',
+      'The guarantee is **at-least-once**: a job runs one or more times, never zero. Exactly once is not achievable across crashes, so the consumer must be idempotent.',
+      'Using the delivery id as the `jobId` makes enqueueing idempotent: adding the same id twice is ignored by the queue.',
+      'A 4xx response is a permanent answer, so retrying a 401 nine times helps nobody. Throw `UnrecoverableError` to stop early.',
+      'The `failed` event fires on every failed attempt, not only the last one. Compare `attemptsMade` with `attempts` to know when the job is truly dead.',
+      'The worker connection must be allowed to perform blocking reads (`maxRetriesPerRequest: null`), otherwise waiting for a job looks like a network error.',
+      'Shut down with `worker.close()` so running jobs finish. `process.exit()` leaves them half-done until the stalled check hands them to another worker.',
     ],
     interviewQuestions: [
-      'At-least-once vs exactly-once â€” which do you get, and what does it force on the consumer?',
+      'At-least-once vs exactly-once: which do you get, and what does it force on the consumer?',
       'What failure does `jobId = deliveryId` prevent, and what does it not prevent?',
       'Why exponential backoff, and why add jitter?',
       'What happens to an active job if the worker is killed mid-flight?',
@@ -579,7 +601,7 @@ throw new Error('503 from receiver'); // retryable`,
       {
         id: 'queues.enqueue-400',
         label: 'Enqueue an unrecoverable 4xx',
-        description: 'Adds a job that throws UnrecoverableError â€” dead on attempt 1.',
+        description: 'Adds a job that throws UnrecoverableError: dead on attempt 1.',
       },
       {
         id: 'queues.dedupe',
@@ -600,19 +622,19 @@ throw new Error('503 from receiver'); // retryable`,
     title: 'Cron jobs',
     status: 'live',
     summary:
-      'A scheduler decides when; a database claim decides who. The unique (job_name, window_start) constraint makes the claim atomic.',
+      'For repeating work, one part decides **when** it is due (the schedule) and another decides **who** runs it (a database claim). A unique key on the job name and time window is what makes "only one replica runs this" true.',
     keyIdeas: [
-      '`upsertJobScheduler` is safe to call from every replica at boot â€” it updates instead of duplicating.',
-      'Cron patterns in BullMQ are six fields: seconds first. `0 0 6 * * *` is 06:00 daily.',
-      '`every: 60_000` is a fixed interval that drifts under load; `pattern` is wall-clock time.',
-      'Claim the window before doing the work. If you work first and record second, both replicas work.',
-      '`insert ... on conflict do nothing returning id` returning zero rows is the "someone else owns this window" signal.',
-      'Cron jobs must be idempotent even with a scheduler: retries, clock changes and manual runs all exist.',
+      '`upsertJobScheduler` updates an existing schedule instead of adding a second one, so every replica can call it at boot.',
+      'BullMQ cron patterns have six fields and start with seconds: `0 0 6 * * *` means 06:00 every day.',
+      '`every: 60_000` is a fixed delay that drifts under load. A `pattern` follows clock time.',
+      'Claim the time window **before** doing the work. Work first and record second, and two replicas both do it.',
+      '`insert ... on conflict do nothing returning id` returning no rows is the signal that another replica already owns this window.',
+      'Even with a scheduler, cron work must be idempotent: retries, clock changes and manual runs all happen.',
     ],
     interviewQuestions: [
       'Three ways cron in a container breaks with multiple replicas.',
       'Why claim the window before doing the work?',
-      'What is the difference between a scheduler and a lock here â€” do you need both?',
+      'What is the difference between a scheduler and a lock here: do you need both?',
       'What happens if a cron job runs twice concurrently and only writes at the end?',
     ],
     snippets: [
@@ -659,17 +681,17 @@ if (claimed.rowCount === 0) return; // another replica owns this window`,
     title: 'Indexes',
     status: 'live',
     summary:
-      'Seed a realistic table, then measure the same query before and after the index the worker needs.',
+      'An index is a sorted shortcut that lets the database find rows without reading the table. It makes reads faster and writes slower, so you add one because a query is slow, and then measure the difference.',
     keyIdeas: [
-      'Every index taxes writes and disk. Add one because a query is slow, not because a column is queried.',
-      'Composite indexes follow leftmost-prefix: `(a, b)` serves `a` and `a,b`, never `b` alone.',
-      'Partial indexes are smaller and hotter: index only the rows the query can match.',
-      'Covering indexes (`INCLUDE`) enable index-only scans â€” watch `Heap Fetches` to confirm it.',
-      'FK columns are not auto-indexed; a cascade without one can full-scan the child per parent.',
-      '`pg_stat_user_indexes.idx_scan = 0` is the signal that an index is dead weight.',
+      'Every index costs time on insert, update and delete, plus disk space. Add one for a slow query, not because a column appears in a WHERE clause.',
+      'A two-column index `(a, b)` serves `a` and `a,b`, but never `b` alone. Think of a phone book sorted by surname, then first name.',
+      'A **partial** index only covers the rows a query cares about, so it is smaller, cheaper to update and more likely to stay in memory.',
+      'A **covering** index already contains every column the query needs, so the table itself is never read. Check `Heap Fetches` in the plan to confirm.',
+      'A foreign-key column is not indexed automatically. Without an index, deleting one parent row can scan the whole child table.',
+      '`pg_stat_user_indexes.idx_scan = 0` means an index has never been used: it is pure cost, and a candidate for deletion.',
     ],
     interviewQuestions: [
-      'Six indexes on one table â€” what is the write cost?',
+      'Six indexes on one table: what is the write cost?',
       'Why does the planner ignore your index on a low-cardinality column?',
       'When is a partial index better than a full one?',
       'Why can a composite index not serve a query on its second column?',
@@ -722,20 +744,20 @@ create index deliveries_sweep_lab
     title: 'Query plans',
     status: 'live',
     summary:
-      'EXPLAIN ANALYZE BUFFERS is the only honest performance measurement. Compare estimated rows to actual rows to find stale stats.',
+      'A query plan is the database explaining how it intends to answer your query. `EXPLAIN ANALYZE` actually runs it and shows what really happened, which is the only performance number worth quoting.',
     keyIdeas: [
-      '`EXPLAIN` alone is a guess; `ANALYZE` executes and reports reality â€” never on a write in production without a transaction.',
-      'A large gap between `rows=` estimated and actual means stale statistics: run `ANALYZE`.',
-      'Seq scan on a big table with a selective filter is the smell. On a small table it is often correct.',
-      '`Sort Method: external merge` and `Batches > 1` mean `work_mem` spilled to disk.',
-      'Nested loop is right for small inputs; hash join for large unsorted ones. The planner chooses by cost.',
-      '`pg_stat_statements` ranks queries by total time, which is where you look first.',
+      '`EXPLAIN` on its own shows what the database **thinks** it will do. Adding `ANALYZE` runs the query and reports real rows and real times.',
+      'A large gap between estimated rows and actual rows means the statistics are stale. Run `ANALYZE` on that table.',
+      'A sequential scan (a seq scan) on a large table with a narrow filter usually means a missing index. On a small table it is often the fastest choice.',
+      '`Sort Method: external merge` with `Batches > 1` means the sort did not fit in memory (`work_mem`) and spilled to disk.',
+      'Join choice is a cost decision: nested loops suit small inputs, hash joins suit large unsorted ones.',
+      '`pg_stat_statements` ranks queries by total time, which tells you where to look first.',
     ],
     interviewQuestions: [
-      '"Slow in prod, fast locally" â€” name six causes.',
+      '"Slow in prod, fast locally": name six causes.',
       'How do you know a plan is wrong rather than the query?',
       'What does a high `Heap Fetches` count tell you?',
-      'When would you raise `work_mem` â€” and when is that the wrong fix?',
+      'When would you raise `work_mem`, and when is that the wrong fix?',
     ],
     snippets: [
       {
@@ -778,14 +800,14 @@ order by seq_scan desc;`,
     title: 'Webhooks',
     status: 'live',
     summary:
-      'Sign `timestamp.body` so a captured payload cannot be replayed later. Stable event ids let receivers dedupe.',
+      'A webhook is a request another company sends you when something happens. You prove it is genuine by signing the body with a shared secret, and you include a timestamp so an old captured request cannot be replayed.',
     keyIdeas: [
-      'Sign `t.body`, not the body alone: otherwise a captured request is valid forever.',
-      'Reject signatures older than ~5 minutes â€” that is the replay window you accept.',
-      'Verify with a constant-time comparison, not `===`.',
-      'Classify the response: 2xx success, 429/5xx retry, other 4xx dead.',
-      'Send a stable `X-Event-Id` so the receiver can be idempotent.',
-      'Rotate secrets by accepting the previous one for verification while signing with the new one.',
+      'Sign the timestamp together with the body. Sign the body alone and one captured request stays valid forever.',
+      'Reject signatures older than a few minutes. That window is how long a replay is still possible.',
+      'Compare signatures in constant time. A normal `===` comparison can leak the answer through how long it takes.',
+      'Treat the reply as a signal: 2xx means done, 429 and 5xx mean retry later, any other 4xx means stop.',
+      'Send a stable event id so the receiver can recognise a repeat and ignore it.',
+      'To rotate a secret, accept the old one for verification while signing with the new one, then retire the old one.',
     ],
     interviewQuestions: [
       'Why include a timestamp in the signed string?',
@@ -811,6 +833,16 @@ if (!timingSafeEqual(hex(signature), hex(received))) return reject('bad signatur
         label: 'Sign, tamper, replay',
         description: 'Computes a real HMAC, then checks a tampered body and a stale timestamp.',
       },
+      {
+        id: 'webhooks.outbound',
+        label: 'Deliver a signed event end to end',
+        description: 'Creates an event, the worker signs and delivers it back to the inbound receiver, dedupe row verified.',
+      },
+      {
+        id: 'webhooks.inbound',
+        label: 'Accept, dedupe and reject',
+        description: 'Posts five inbound requests: fresh, replay, tampered, stale and unsigned.',
+      },
     ],
   },
   {
@@ -820,13 +852,13 @@ if (!timingSafeEqual(hex(signature), hex(received))) return reject('bad signatur
     title: 'Polling',
     status: 'live',
     summary:
-      'When the consumer cannot accept inbound traffic, poll â€” but make it cheap with ETag/304 and keep jitter in the retry loop.',
+      'Sometimes the other side cannot send you anything, because a firewall blocks inbound traffic. Then you ask on a timer. Done well that means conditional requests and randomised waits; done badly it is a self-inflicted load test.',
     keyIdeas: [
-      '`ETag` + `If-None-Match` returns 304 with no body: bandwidth scales with changes, not with polls.',
-      'Long-poll holds the request open for a bounded time to cut latency without a socket.',
-      'Backoff must be randomized or every client retries in the same instant.',
-      'Polling the provider as a webhook fallback needs a stored cursor and a lock so only one replica polls.',
-      'Prefer webhooks for latency and cost; prefer polling when inbound traffic is impossible.',
+      '`ETag` plus `If-None-Match` lets the server answer "nothing changed" without a body, so the cost follows changes rather than poll frequency.',
+      'A long poll keeps the request open for a short while, which reduces delay without needing a socket connection.',
+      'Randomise the wait. Without jitter, every client retries at the same moment and the spike is your own doing.',
+      'Polling as a webhook fallback needs a stored cursor (how far you got) and a lock, so only one replica polls.',
+      'Prefer webhooks for latency and cost. Prefer polling when inbound traffic is impossible.',
     ],
     interviewQuestions: [
       'The customer firewall blocks inbound. Now what?',
@@ -857,6 +889,11 @@ const delay = Math.random() * Math.min(cap, base * 2 ** attempt);`,
         label: 'Round-trip 200 then 304',
         description: 'Requests this server twice, honouring If-None-Match.',
       },
+      {
+        id: 'polling.lifecycle',
+        label: 'Poll a delivery with ETag and long-poll',
+        description: 'Creates a delivery, then shows the 200, the 304 and a long-poll returning on terminal state.',
+      },
     ],
   },
   {
@@ -864,19 +901,21 @@ const delay = Math.random() * Math.min(cap, base * 2 ** attempt);`,
     order: 14,
     phase: '6',
     title: 'Logs',
-    status: 'reference',
+    status: 'live',
     summary:
-      'Reference card: not wired into this build. Structured JSON, correlation ids, redaction, and durable audit as a separate concern.',
+      'Logs here are structured logging: one JSON object per line, with secrets removed before the line is written and an id that ties every line to one request. The audit log is separate: it is permanent business history, not debugging output.',
     keyIdeas: [
-      'Structured JSON, not string concatenation: logs are queried, not read.',
-      'Child logger per request carrying `requestId`, `tenantId`; pass the id into job payloads for end-to-end tracing.',
-      'Redact secrets at the logger level so a forgotten field cannot leak.',
-      'Write to stdout in containers; the platform collects. Files need rotation or they fill the disk.',
-      'Redis Streams for log fan-out, not Pub/Sub: Streams can replay and support consumer groups.',
-      'Audit rows are business records with years of retention; app logs are operational with days.',
+      'Write structured JSON instead of formatted text. You filter and group logs by field; you do not read them line by line.',
+      'Give each request its own logger carrying `requestId` and `tenantId`, and pass the same id into job payloads so one story runs from request to delivery.',
+      'Redact at the logger, once, so a field someone forgot to hide cannot leak.',
+      'In containers, write to stdout and let the platform collect it. Writing to a file inside a container needs rotation, or it fills the disk.',
+      'Redis Streams can be replayed and read by several consumers. Pub/Sub cannot, which makes it the wrong tool for logs.',
+      'Audit log rows are business records kept for years. Application logs are operational and kept for days.',
+      'In this project `requestLogger` writes when the response finishes, pino applies the redaction rules, and `appendLog` appends to `logs:events` capped at about 10,000 entries.',
+      'The audit path is `recordAudit()` behind a service, so a future endpoint can record history without writing any SQL.',
     ],
     interviewQuestions: [
-      'Logs vs metrics vs traces â€” what question does each answer?',
+      'Logs vs metrics vs traces: what question does each answer?',
       'Why is Pub/Sub the wrong choice for a log pipeline?',
       'How do you correlate a log line with the HTTP request that caused it?',
       'What do you alert on?',
@@ -899,7 +938,349 @@ log.info({ deliveryId }, 'delivery attempted');`,
 redis-cli XREAD COUNT 10 BLOCK 0 STREAMS logs:events '$'`,
       },
     ],
-    actions: [],
+    actions: [
+      {
+        id: 'logs.structured',
+        label: 'Render a structured line',
+        description: 'Logs with secrets present and shows the redacted JSON that actually gets written.',
+      },
+      {
+        id: 'logs.stream',
+        label: 'Append to the Redis Stream',
+        description: 'XADDs three entries, reads them back newest-first, and reports the capped length.',
+      },
+      {
+        id: 'logs.correlation',
+        label: 'Trace one request by id',
+        description: 'Calls the health endpoint with a known x-request-id, then finds that line in the stream.',
+      },
+      {
+        id: 'logs.audit',
+        label: 'Write and read an audit row',
+        description: 'Uses the real audit service to insert and re-read a business event.',
+      },
+    ],
+  },
+  {
+    id: 'caching',
+    order: 15,
+    phase: '11c',
+    title: 'Caching',
+    status: 'live',
+    summary:
+      'A cache keeps a copy of expensive data closer to the reader, in its own keyspace, so repeated requests can skip the database. The two hard parts are deciding how long a copy may be wrong, and what to do when the cache itself fails.',
+    keyIdeas: [
+      'Cache-aside means: check the cache, on a miss read the database, store the result with a TTL (time to live, meaning how long the copy is kept), then return it. The application owns the cache; the database does not know it exists.',
+      'A cache is a **correctness trade**: you accept serving data that is a little old. The only question is how old, and the TTL answers it.',
+      'Delete the key when the data changes, and do it **after** the transaction commits. The TTL is a safety net, not the strategy.',
+      'A stampede is many callers missing the same key at once. Single-flight lets one caller load it while the rest wait; across several servers you need a Redis lock or randomised expiry.',
+      'Negative caching stores the "not found" answer for a few seconds, so someone guessing ids cannot turn your cache into a database load generator.',
+      'A cache must **fail open**: when it is down, read from the database. A cache you cannot live without has become a single point of failure.',
+    ],
+    interviewQuestions: [
+      'Walk me through cache-aside for a read endpoint. Where does invalidation go?',
+      'Why invalidate after commit rather than before?',
+      'Ten thousand keys expire at the same second. What happens and how do you prevent it?',
+      'What is cache penetration, and how is it different from a stampede?',
+      'What would you cache in this system, and what would you never cache?',
+      'How do you keep the cache consistent across several API replicas?',
+      'What happens to your read path when the cache is down?',
+    ],
+    snippets: [
+      {
+        label: 'cache-aside with a TTL',
+        language: 'ts',
+        code: `const key = \`tenant-summary:\${tenantId}\`;
+
+const cached = await cacheGet<TenantSummary>(key);
+if (cached) return { ...cached, source: 'cache' };
+
+const summary = await computeSummary(tenantId);   // the expensive query
+await cacheSet(key, summary, 30);                 // TTL is a safety net
+return { ...summary, source: 'db' };`,
+      },
+      {
+        label: 'single flight for a stampede',
+        language: 'ts',
+        code: `let pending = inFlight.get(key);
+const leader = pending === undefined;
+
+if (!pending) {
+  pending = compute(key)
+    .then(async (value) => { await cacheSet(key, value, 30); return value; })
+    .finally(() => inFlight.delete(key));
+  inFlight.set(key, pending);
+}
+
+const value = await pending;   // one database read, many waiters
+return { value, source: leader ? 'db' : 'coalesced' };`,
+      },
+      {
+        label: 'cross-process lock (what single-flight cannot do)',
+        language: 'ts',
+        code: `// SET NX PX is the primitive: only one replica wins the lock.
+const won = await redis.set(\`lock:\${key}\`, '1', 'PX', 5000, 'NX');
+if (!won) {
+  await sleep(50);
+  return cacheGet(key);      // re-check, someone else is filling it
+}
+
+try {
+  const value = await compute(key);
+  await cacheSet(key, value, 30);
+  return value;
+} finally {
+  await redis.del(\`lock:\${key}\`);
+}`,
+      },
+      {
+        label: 'negative caching',
+        language: 'ts',
+        code: `const summary = await computeSummary(tenantId);
+
+// 5s, not 30s: the row may be created a moment later.
+await cacheSet(key, summary ?? { __missing: true }, summary ? 30 : 5);
+
+return summary;   // null -> 404, but the next request never hits the database`,
+      },
+    ],
+    actions: [
+      {
+        id: 'cache.hit-miss',
+        label: 'Measure a cache miss vs hit',
+        description: 'Invalidates, then reads three times: one database computation, two cache hits.',
+      },
+      {
+        id: 'cache.invalidate',
+        label: 'Invalidate on write',
+        description: 'Warms the key, invalidates it, and shows the next read going back to the database.',
+      },
+      {
+        id: 'cache.stampede',
+        label: 'Fire 12 concurrent misses',
+        description: 'Single-flight collapses twelve simultaneous misses into one database read.',
+      },
+      {
+        id: 'cache.penetration',
+        label: 'Request ids that do not exist',
+        description: 'Five requests for a missing tenant: one database read, four negative-cache hits.',
+      },
+      {
+        id: 'cache.staleness',
+        label: 'Show stale data after a write',
+        description: 'Writes without invalidating, proving the cache serves the old count until cleared.',
+      },
+      {
+        id: 'cache.status',
+        label: 'Check the cache service',
+        description: 'Reachability, isolation mode, key count and what the fallback is.',
+      },
+    ],
+  },
+  {
+    id: 'concurrency',
+    order: 16,
+    phase: '11b',
+    title: 'Transactions & isolation',
+    status: 'live',
+    summary:
+      'Two database sessions touching the same row is where the rules become visible. The same counter ends at 5, 1 or 2 depending on the isolation level and the locks you chose. Underneath it all, MVCC keeps several versions of a row so readers never block writers.',
+    keyIdeas: [
+      '`READ COMMITTED` is the default: every **statement** sees the latest committed data. Two reads in one transaction can disagree, and it does not prevent lost updates.',
+      'Read a value into your code, add one, write it back: that is the lost update. `SET value = value + 1` happens inside the database, so it is atomic.',
+      '`SELECT ... FOR UPDATE` reserves the row: the second writer waits until the first commits. The lock lasts until the end of the transaction, so keep transactions short.',
+      'A deadlock is two transactions each holding what the other needs. PostgreSQL notices after about a second, aborts one with `40P01`, and expects a retry.',
+      '`SERIALIZABLE` is optimistic: it lets work run and rejects conflicts with `40001`, so your code must retry the whole transaction with backoff.',
+      '`REPEATABLE READ` gives one snapshot for the entire transaction. Reports use it so their own numbers stay consistent.',
+    ],
+    interviewQuestions: [
+      'Two requests increment the same counter and one increment vanishes. Why, and how do you fix it?',
+      'What exactly does `SELECT ... FOR UPDATE` lock, and for how long?',
+      'How does a deadlock happen, how do you detect it, and how do you prevent it?',
+      'Under `SERIALIZABLE`, what error do you get and what must your code do about it?',
+      'Which isolation level would you pick for a multi-table report, and why?',
+      'Why can adding a retry loop make a hot row worse?',
+      'Why is `UPDATE ... SET value = value + 1` safer than reading the value and writing it back?',
+    ],
+    snippets: [
+      {
+        label: 'the lost update',
+        language: 'sql',
+        code: `-- session A                    -- session B
+BEGIN;                          BEGIN;
+SELECT value FROM counter;      -- 0
+                                SELECT value FROM counter; -- 0
+UPDATE counter SET value = 1;   -- read 0 + 1
+COMMIT;
+                                UPDATE counter SET value = 1; -- read 0 + 1
+                                COMMIT;
+-- final value: 1, not 2`,
+      },
+      {
+        label: 'serialize it with a row lock',
+        language: 'sql',
+        code: `BEGIN;
+SELECT value FROM counter WHERE key = $1 FOR UPDATE; -- B blocks here
+UPDATE counter SET value = $2 WHERE key = $1;
+COMMIT; -- B proceeds with the committed value`,
+      },
+      {
+        label: 'serializable needs a retry loop',
+        language: 'ts',
+        code: `for (let attempt = 1; attempt <= 3; attempt++) {
+  try {
+    await client.query('begin isolation level serializable');
+    // ...read, compute, write...
+    await client.query('commit');
+    return;
+  } catch (err) {
+    await client.query('rollback');
+    if ((err as { code?: string }).code !== '40001' || attempt === 3) throw err;
+    await sleep(50 * 2 ** attempt + Math.random() * 50);
+  }
+}`,
+      },
+      {
+        label: 'same reads, different levels',
+        language: 'sql',
+        code: `BEGIN ISOLATION LEVEL READ COMMITTED;
+SELECT value FROM counter;  -- 0
+-- another session commits value = 5
+SELECT value FROM counter;  -- 5   (new snapshot per statement)
+
+BEGIN ISOLATION LEVEL REPEATABLE READ;
+SELECT value FROM counter;  -- 0
+-- another session commits value = 5
+SELECT value FROM counter;  -- 0   (same snapshot)`,
+      },
+    ],
+    actions: [
+      {
+        id: 'concurrency.lost-update',
+        label: 'Lose an update',
+        description: 'Two transactions read 0 and both write 1; the final value is 1, with no error.',
+      },
+      {
+        id: 'concurrency.for-update',
+        label: 'Lock the row with FOR UPDATE',
+        description: 'The second reader blocks, then reads the committed value; both increments survive.',
+      },
+      {
+        id: 'concurrency.deadlock',
+        label: 'Trigger a deadlock',
+        description: 'Opposite lock order, one transaction aborted with 40P01.',
+      },
+      {
+        id: 'concurrency.serializable',
+        label: 'Force a serialization failure',
+        description: 'SERIALIZABLE returns 40001, then a clean retry succeeds.',
+      },
+      {
+        id: 'concurrency.isolation',
+        label: 'Compare isolation levels',
+        description: 'The same two reads under READ COMMITTED and REPEATABLE READ, side by side.',
+      },
+    ],
+  },
+  {
+    id: 'capstone',
+    order: 17,
+    phase: '13',
+    title: 'Capstone: operate it',
+    status: 'live',
+    summary:
+      'The earlier cards build the system. This one measures it under load and breaks its dependencies on purpose, so you can talk about observed behaviour instead of a diagram.',
+    keyIdeas: [
+      'The fast path does no waiting: validate, write, enqueue, return. Time spent talking to a customer endpoint belongs in the worker.',
+      'Quote **p99** (the time under which 99% of requests finish). Averages hide the slow tail, and the tail is what people feel and what an SLO (service level objective) is written against.',
+      'A connection pool is a queue with a hard limit. When it is full, even `/v1/health` waits, and an orchestrator may restart a container that was only busy.',
+      'A Redis outage is not one behaviour: reads keep working, rate limiting fails open, and enqueue fails **after** the transaction committed. That gap is why the outbox pattern exists.',
+      'A slow customer endpoint is absorbed by the queue until workers are saturated. After that, delay grows in the queue; it never becomes API latency.',
+      'Order of checks during an incident: worker count, queue depth, delivery states, pool counters, table size. Read the logs only after those numbers.',
+      'Every number on this card comes from the running system, so you can quote measured latencies rather than guesses.',
+    ],
+    interviewQuestions: [
+      'p99 regressed after a deploy. How do you find the cause, and what do you roll back first?',
+      'The delivery queue is backing up. What are the first three things you check?',
+      'Redis is down for two minutes. What still works, what fails, and what has to be repaired afterwards?',
+      'How do you prove the connection pool is exhausted, from inside the application?',
+      'Why is "add more replicas" sometimes the wrong answer to a pool problem?',
+      'A customer endpoint consistently takes 30 seconds. What breaks first in your system?',
+      'What would you alert on, and at what threshold: queue depth, worker count, or error rate?',
+      'Which of these failures would you page someone for at 3am, and which can wait until morning?',
+    ],
+    snippets: [
+      {
+        label: 'bounded concurrency for a load test',
+        language: 'ts',
+        code: `let cursor = 0;
+const runners = Array.from({ length: 20 }, async () => {
+  for (;;) {
+    const index = cursor++;
+    if (index >= 200) return;
+    await call(index); // at most 20 in flight
+  }
+});
+await Promise.all(runners);`,
+      },
+      {
+        label: 'percentiles, not averages',
+        language: 'ts',
+        code: `const sorted = latencies.sort((a, b) => a - b);
+const p = (q: number) => sorted[Math.ceil((q / 100) * sorted.length) - 1];
+console.log({ p50: p(50), p95: p(95), p99: p(99) });`,
+      },
+      {
+        label: 'prove pool saturation',
+        language: 'ts',
+        code: `const held = [];
+for (let i = 0; i < pool.max; i++) held.push(await pool.connect());
+
+const waiter = pool.connect();      // this one is now queued
+await sleep(100);
+console.log('waiting:', pool.waitingCount); // 1
+
+held.pop().release();               // frees a slot
+await waiter;                       // resolves
+// finally { held.forEach(c => c.release()) }`,
+      },
+      {
+        label: 'fail-open limiter',
+        language: 'ts',
+        code: `try {
+  count = await redis.incr(key);
+} catch {
+  return next(); // throttling must not become an outage
+}`,
+      },
+    ],
+    actions: [
+      {
+        id: 'capstone.load',
+        label: 'Load test the ingest path',
+        description: '200 requests at concurrency 20 through auth, validation, fan-out and enqueue; reports p50/p95/p99.',
+      },
+      {
+        id: 'capstone.pool',
+        label: 'Saturate the connection pool',
+        description: 'Checks out every pool slot, proves the next caller waits, then frees one and watches it proceed.',
+      },
+      {
+        id: 'capstone.redis-down',
+        label: 'Probe a dead Redis',
+        description: 'Times a failed connect and maps which features degrade, which fail open and which fail hard.',
+      },
+      {
+        id: 'capstone.slow-receiver',
+        label: 'Deliver to a slow receiver',
+        description: 'A 2.5s receiver: the API stays fast, the worker absorbs the wait.',
+      },
+      {
+        id: 'capstone.readout',
+        label: 'Live system readout',
+        description: 'Workers, queue depth, delivery states, attempt timings, pool counters and table sizes in one table.',
+      },
+    ],
   },
 ];
 
