@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>HookRelay — Interview Labs</title>
+    <link rel="stylesheet" href="/labs/labs.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <span class="brand-mark">HR</span>
+          <div>
+            <strong>Interview Labs</strong>
+            <span class="brand-sub">HookRelay study guide</span>
+          </div>
+        </div>
+
+        <label class="search">
+          <span class="sr-only">Filter topics</span>
+          <input id="filter" type="search" placeholder="Filter topics…" autocomplete="off" />
+        </label>
+
+        <div class="progress">
+          <div class="progress-bar"><span id="progress-fill"></span></div>
+          <span id="progress-label">0 of 0 reviewed</span>
+        </div>
+
+        <nav id="topic-nav" aria-label="Topics"></nav>
+
+        <div class="sidebar-foot">
+          <button id="reset-progress" type="button" class="link-button">Reset progress</button>
+        </div>
+      </aside>
+
+      <main id="main" class="main" tabindex="-1"></main>
+    </div>
+
+    <script type="module" src="/labs/labs.js"></script>
+  </body>
+</html>
