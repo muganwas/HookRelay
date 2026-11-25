@@ -5,7 +5,15 @@ import type { ActionResult } from '../src/modules/labs/labs.types.js';
 import { closeResources } from './helpers.js';
 
 /** These need a listening server, so they are covered in http.test.ts. */
-const SERVER_DEPENDENT = new Set(['middleware.error-contract', 'polling.etag', 'logs.correlation']);
+const SERVER_DEPENDENT = new Set([
+  'middleware.error-contract',
+  'middleware.auth',
+  'middleware.validation',
+  'middleware.ratelimit',
+  'middleware.rawbody',
+  'polling.etag',
+  'logs.correlation',
+]);
 
 after(closeResources);
 

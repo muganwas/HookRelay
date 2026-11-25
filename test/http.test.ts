@@ -176,6 +176,53 @@ describe('server-dependent demos', () => {
     assert.equal(byKey.get('status'), '200');
     assert.ok(byKey.get('requestId'), 'the entry must carry the request id');
   });
+
+  it('middleware.auth rejects every failure mode with the right status', async () => {
+    const action = getLabAction('middleware.auth');
+    assert.ok(action);
+
+    const result = await action.run({ baseUrl });
+    const statuses = (result.table?.rows ?? []).map((row) => Number(row[1]));
+
+    assert.deepEqual(statuses, [200, 401, 401, 403, 401]);
+  });
+
+  it('middleware.validation returns 400 with structured issues', async () => {
+    const action = getLabAction('middleware.validation');
+    assert.ok(action);
+
+    const result = await action.run({ baseUrl });
+    const rows = result.table?.rows ?? [];
+    const statuses = rows.map((row) => Number(row[1]));
+
+    assert.deepEqual(statuses, [400, 400, 400, 400, 200]);
+    for (const row of rows.slice(0, 4)) {
+      assert.ok(String(row[2]).length > 0, 'each rejection must name the problem');
+    }
+  });
+
+  it('middleware.ratelimit allows the limit then returns 429', async () => {
+    const action = getLabAction('middleware.ratelimit');
+    assert.ok(action);
+
+    const result = await action.run({ baseUrl });
+    const statuses = (result.table?.rows ?? []).map((row) => Number(row[1]));
+
+    assert.equal(statuses.filter((status) => status === 200).length, 5);
+    assert.equal(statuses.filter((status) => status === 429).length, 2);
+    assert.match(result.title, /5 allowed, 2 rejected/);
+  });
+
+  it('middleware.rawbody hashes the exact bytes the client sent', async () => {
+    const action = getLabAction('middleware.rawbody');
+    assert.ok(action);
+
+    const result = await action.run({ baseUrl });
+    const byKey = new Map((result.table?.rows ?? []).map((row) => [String(row[0]), row[1]]));
+
+    assert.equal(byKey.get('match'), true);
+    assert.equal(Number(byKey.get('raw bytes received')), Number(byKey.get('raw bytes as sent')));
+  });
 });
 
 describe('health', () => {

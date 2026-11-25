@@ -9,6 +9,9 @@ import { pingRedis } from './infra/redis.js';
 import { createHealthService } from './modules/health/health.service.js';
 import { createHealthController } from './modules/health/health.controller.js';
 import { createHealthRouter } from './modules/health/health.routes.js';
+import { createEchoController } from './modules/echo/echo.controller.js';
+import { createEchoRouter } from './modules/echo/echo.routes.js';
+import type { RawBodyRequest } from './shared/request-body.js';
 import { createLabsController } from './modules/labs/labs.controller.js';
 import { createLabsRouter } from './modules/labs/labs.routes.js';
 
@@ -20,12 +23,27 @@ export function createApp(): Express {
 
   app.use(mount('requestId', requestId));
   app.use(mount('requestLogger', requestLogger));
-  app.use(mount('express.json(1mb)', express.json({ limit: '1mb' })));
+  app.use(
+    mount(
+      'express.json(1mb, rawBody)',
+      express.json({
+        limit: '1mb',
+        // Capture the untouched bytes before parsing: HMAC verification needs
+        // the exact body the sender signed, not a re-serialised object.
+        verify: (req, _res, buffer) => {
+          (req as RawBodyRequest).rawBody = Buffer.from(buffer);
+        },
+      }),
+    ),
+  );
 
   const healthService = createHealthService({ pingDb, pingRedis });
   const healthController = createHealthController(healthService);
   app.use('/v1/health', createHealthRouter(healthController));
   registerMiddleware('router:/v1/health');
+
+  app.use('/v1/echo', createEchoRouter(createEchoController()));
+  registerMiddleware('router:/v1/echo (auth -> rateLimit -> validate)');
 
   app.use('/labs', createLabsRouter(createLabsController()));
   registerMiddleware('router:/labs');
