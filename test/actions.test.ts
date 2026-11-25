@@ -168,6 +168,54 @@ describe('infra: dependencies answer', () => {
   });
 });
 
+describe('concurrency: isolation behaviour', () => {
+  it('loses an update under read committed', async () => {
+    const result = await mustGet('concurrency.lost-update').run({});
+    const rows = tableOf(result).rows;
+    const final = Number(rows.find((row) => String(row[0]) === 'COMMIT' && String(row[2]) === 'done')?.[3] ?? -1);
+
+    assert.match(result.title, /vanished/);
+    assert.equal(final, 1, 'expected the lost update to leave 1');
+  });
+
+  it('keeps both increments with FOR UPDATE', async () => {
+    const result = await mustGet('concurrency.for-update').run({});
+    const byKey = new Map(tableOf(result).rows.map((row) => [String(row[0]), String(row[1])]));
+
+    assert.match(result.title, /survived/);
+    assert.equal(byKey.get('final value'), '2');
+    assert.equal(byKey.get('B was still blocked after 250 ms'), 'true');
+  });
+
+  it('detects a deadlock with 40P01', async () => {
+    const result = await mustGet('concurrency.deadlock').run({});
+    const outcomes = tableOf(result).rows.map((row) => String(row[3]));
+
+    assert.ok(outcomes.includes('40P01'), `expected a deadlock victim, got ${outcomes.join(', ')}`);
+    assert.match(result.title, /aborted one transaction/);
+  });
+
+  it('forces a serialization failure then succeeds on retry', async () => {
+    const result = await mustGet('concurrency.serializable').run({});
+    const byKey = new Map(tableOf(result).rows.map((row) => [String(row[0]), String(row[1])]));
+
+    assert.equal(byKey.get('B first attempt'), '40001');
+    assert.equal(byKey.get('final value'), '2');
+    assert.match(result.title, /retry succeeded/);
+  });
+
+  it('shows different snapshots per isolation level', async () => {
+    const result = await mustGet('concurrency.isolation').run({});
+    const rows = tableOf(result).rows;
+
+    const readCommitted = rows.find((row) => String(row[0]) === 'READ COMMITTED');
+    const repeatableRead = rows.find((row) => String(row[0]) === 'REPEATABLE READ');
+
+    assert.equal(readCommitted?.[3], true, 'read committed must see the change');
+    assert.equal(repeatableRead?.[3], false, 'repeatable read must keep its snapshot');
+  });
+});
+
 describe('capstone: operational signals', () => {
   it('reads live system state', async () => {
     const result = await mustGet('capstone.readout').run({});
