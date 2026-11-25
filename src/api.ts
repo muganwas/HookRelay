@@ -1,5 +1,6 @@
 import { config } from './config.js';
 import { createApp } from './app.js';
+import { closeCache } from './infra/cache.js';
 import { pool } from './infra/db.js';
 import { redis } from './infra/redis.js';
 import { closeDeliveryQueue } from './modules/deliveries/delivery.job.js';
@@ -24,6 +25,7 @@ async function shutdown(reason: string): Promise<void> {
 
   await new Promise<void>((resolve) => server.close(() => resolve()));
   await Promise.allSettled([closeDeliveryQueue(), closeOpsQueue()]);
+  closeCache();
   await Promise.allSettled([pool.end(), redis.quit()]);
 
   clearTimeout(forceExit);

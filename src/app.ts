@@ -17,6 +17,8 @@ import { createDeliveryController } from './modules/deliveries/delivery.controll
 import { createDeliveryRouter } from './modules/deliveries/delivery.routes.js';
 import { createInboundController } from './modules/webhooks/inbound.controller.js';
 import { createInboundRouter } from './modules/webhooks/inbound.routes.js';
+import { createTenantController } from './modules/tenants/tenant.controller.js';
+import { createTenantRouter } from './modules/tenants/tenant.routes.js';
 import type { RawBodyRequest } from './shared/request-body.js';
 import { createLabsController } from './modules/labs/labs.controller.js';
 import { createLabsRouter } from './modules/labs/labs.routes.js';
@@ -59,6 +61,9 @@ export function createApp(): Express {
 
   app.use('/v1/webhooks/inbound', createInboundRouter(createInboundController()));
   registerMiddleware('router:/v1/webhooks/inbound (signature)');
+
+  app.use('/v1/tenants', createTenantRouter(createTenantController()));
+  registerMiddleware('router:/v1/tenants (auth, cache-aside)');
 
   app.use('/labs', createLabsRouter(createLabsController()));
   registerMiddleware('router:/labs');

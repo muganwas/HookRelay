@@ -12,6 +12,8 @@ const EnvSchema = z.object({
   // How the worker reaches this API (webhooks are delivered back to it in the labs).
   SELF_BASE_URL: z.url().optional(),
   INBOUND_WEBHOOK_SECRET: z.string().min(16).optional(),
+  // Dedicated cache. Falls back to the main Redis on db 1 when unset.
+  CACHE_URL: z.url().optional(),
 });
 
 const parsed = EnvSchema.safeParse(process.env);

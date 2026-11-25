@@ -1,4 +1,5 @@
 import { pool } from '../src/infra/db.js';
+import { closeCache } from '../src/infra/cache.js';
 import { redis } from '../src/infra/redis.js';
 import { closeDeliveryQueue } from '../src/modules/deliveries/delivery.job.js';
 import { closeOpsQueue } from '../src/modules/ops/ops.job.js';
@@ -10,6 +11,7 @@ import { closeOpsQueue } from '../src/modules/ops/ops.job.js';
  */
 export async function closeResources(): Promise<void> {
   await Promise.allSettled([closeDeliveryQueue(), closeOpsQueue()]);
+  closeCache();
   redis.disconnect();
   await pool.end().catch(() => undefined);
 }

@@ -7,6 +7,7 @@ import { runtimeActions } from './labs.actions.runtime.js';
 import { webhookActions } from './labs.actions.webhooks.js';
 import { capstoneActions } from './labs.actions.capstone.js';
 import { concurrencyActions } from './labs.actions.concurrency.js';
+import { cacheActions } from './labs.actions.cache.js';
 
 const all: ActionDefinition[] = [
   ...dataActions,
@@ -15,6 +16,7 @@ const all: ActionDefinition[] = [
   ...middlewareActions,
   ...runtimeActions,
   ...webhookActions,
+  ...cacheActions,
   ...concurrencyActions,
   ...capstoneActions,
 ];

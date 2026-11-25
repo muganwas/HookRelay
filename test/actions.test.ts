@@ -18,6 +18,14 @@ const SERVER_DEPENDENT = new Set([
   // against the compose stack rather than in the host test process.
   'webhooks.outbound',
   'polling.lifecycle',
+  // Cache demos read an in-process computation counter, so they must run
+  // against this process, not the container.
+  'cache.hit-miss',
+  'cache.invalidate',
+  'cache.stampede',
+  'cache.penetration',
+  'cache.staleness',
+  'cache.status',
 ]);
 
 after(closeResources);
