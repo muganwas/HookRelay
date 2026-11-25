@@ -1,6 +1,7 @@
 import express from 'express';
 import type { Express } from 'express';
 import { requestId } from './shared/request-id.js';
+import { requestLogger } from './shared/request-logger.js';
 import { errorHandler, notFound } from './shared/error-handler.js';
 import { registerMiddleware, resetMiddlewareRegistry } from './shared/middleware-registry.js';
 import { pingDb } from './infra/db.js';
@@ -18,6 +19,7 @@ export function createApp(): Express {
   app.disable('x-powered-by');
 
   app.use(mount('requestId', requestId));
+  app.use(mount('requestLogger', requestLogger));
   app.use(mount('express.json(1mb)', express.json({ limit: '1mb' })));
 
   const healthService = createHealthService({ pingDb, pingRedis });

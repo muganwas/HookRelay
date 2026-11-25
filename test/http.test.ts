@@ -163,6 +163,19 @@ describe('server-dependent demos', () => {
     assert.equal(rows[1]?.[3], 0, '304 must carry no body');
     assert.ok(Number(rows[0]?.[3]) > 0, 'first response should have a body');
   });
+
+  it('logs.correlation finds the request it triggered', async () => {
+    const action = getLabAction('logs.correlation');
+    assert.ok(action);
+
+    const result = await action.run({ baseUrl });
+    const byKey = new Map((result.table?.rows ?? []).map((row) => [String(row[0]), String(row[1])]));
+
+    assert.match(result.title, /traceable line/);
+    assert.equal(byKey.get('path'), '/v1/health');
+    assert.equal(byKey.get('status'), '200');
+    assert.ok(byKey.get('requestId'), 'the entry must carry the request id');
+  });
 });
 
 describe('health', () => {

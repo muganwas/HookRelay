@@ -4,8 +4,8 @@ import { getLabAction, labActions } from '../src/modules/labs/labs.actions.js';
 import type { ActionResult } from '../src/modules/labs/labs.types.js';
 import { closeResources } from './helpers.js';
 
-/** These two need a listening server, so they are covered in http.test.ts. */
-const SERVER_DEPENDENT = new Set(['middleware.error-contract', 'polling.etag']);
+/** These need a listening server, so they are covered in http.test.ts. */
+const SERVER_DEPENDENT = new Set(['middleware.error-contract', 'polling.etag', 'logs.correlation']);
 
 after(closeResources);
 
@@ -152,6 +152,53 @@ describe('infra: dependencies answer', () => {
 
     assert.match(byLabel.get('Postgres') ?? '', /PostgreSQL/);
     assert.match(byLabel.get('Redis version') ?? '', /^\d+\./);
+  });
+});
+
+describe('logs: structured output', () => {
+  it('redacts secrets before writing and drops below-level lines', async () => {
+    const result = await mustGet('logs.structured').run({});
+    const rows = tableOf(result).rows;
+    const text = rows.map((row) => String(row[1])).join('\n');
+
+    assert.equal(rows.length, 2, 'debug must be filtered at level info');
+    assert.match(text, /\[redacted\]/);
+    assert.doesNotMatch(text, /whsec_super_secret_value/);
+    assert.doesNotMatch(text, /hr_live_abc123/);
+  });
+
+  it('serialises errors with a message and stack', async () => {
+    const result = await mustGet('logs.structured').run({});
+    const text = tableOf(result).rows.map((row) => String(row[1])).join('\n');
+
+    assert.match(text, /"type":"Error"/);
+    assert.match(text, /upstream returned 503/);
+  });
+});
+
+describe('logs: redis stream', () => {
+  it('appends entries and reads them back', async () => {
+    const result = await mustGet('logs.stream').run({});
+    const rows = tableOf(result).rows;
+
+    assert.ok(rows.length >= 3, `expected at least 3 entries, got ${rows.length}`);
+    assert.ok(rows.some((row) => row[2] === 'lab.stream.sample'));
+
+    const appended = Number(/^(\d+) entries/.exec(result.title)?.[1] ?? 0);
+    assert.ok(appended >= 3, `expected >= 3 appended, title said ${result.title}`);
+
+    for (const row of rows) assert.match(String(row[0]), /^\d+-\d+$/);
+  });
+});
+
+describe('logs: audit trail', () => {
+  it('writes a business record to audit.audit_log', async () => {
+    const result = await mustGet('logs.audit').run({});
+    const rows = tableOf(result).rows;
+
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0]?.[1], 'endpoint.created');
+    assert.equal(rows[0]?.[2], 'user:lab');
   });
 });
 
