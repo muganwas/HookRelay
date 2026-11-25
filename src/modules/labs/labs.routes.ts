@@ -9,6 +9,7 @@ export function createLabsRouter(controller: LabsController): Router {
   const router = Router();
 
   router.get('/api/topics', controller.listTopics);
+  router.get('/api/glossary', controller.listGlossary);
   router.post('/api/actions/:actionId', controller.runAction);
   router.get('/api/probe/error', controller.probeError);
 

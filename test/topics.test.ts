@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { after, describe, it } from 'node:test';
 import { topics, getTopic } from '../src/modules/labs/labs.topics.js';
 import { actionsForTopic, getLabAction, labActions } from '../src/modules/labs/labs.actions.js';
+import { areaLabels, glossary, glossaryByArea } from '../src/modules/labs/labs.glossary.js';
 import { closeResources } from './helpers.js';
 
 after(closeResources);
@@ -47,6 +48,74 @@ describe('topic catalogue', () => {
           `${topic.id}/${snippet.label} still contains a TODO`,
         );
       }
+    }
+  });
+});
+
+describe('glossary', () => {
+  it('explains every entry with an expansion and a plain-language sentence', () => {
+    for (const entry of glossary) {
+      assert.ok(entry.term.length > 1, 'entry without a term');
+      assert.ok(entry.full.length > 1, `${entry.term} has no expansion`);
+      assert.ok(entry.plain.length > 20, `${entry.term} has no plain-language explanation`);
+      assert.ok(areaLabels[entry.area], `${entry.term} points at unknown area ${entry.area}`);
+    }
+  });
+
+  it('has no duplicate terms or aliases', () => {
+    const forms = glossary.flatMap((entry) => [entry.term, ...(entry.match ?? [])]);
+    const lowered = forms.map((form) => form.toLowerCase());
+
+    assert.equal(new Set(lowered).size, lowered.length, 'two entries claim the same spelling');
+  });
+
+  it('groups every entry under a labelled area', () => {
+    const grouped = glossaryByArea();
+
+    assert.deepEqual(
+      grouped.map((group) => group.area),
+      ['web', 'node', 'postgres', 'queues', 'caching', 'ops', 'git'],
+    );
+    assert.equal(
+      grouped.reduce((total, group) => total + group.entries.length, 0),
+      glossary.length,
+    );
+    for (const group of grouped) {
+      assert.equal(group.label, areaLabels[group.area]);
+    }
+  });
+
+  it('covers the abbreviations the lab prose actually uses', () => {
+    const required = ['TTL', 'HMAC', 'ETag', 'UUID', 'FK', 'PK', 'SLO', 'PR', 'CI', 'MVCC'];
+    const terms = new Set(
+      glossary.flatMap((entry) => [entry.term, ...(entry.match ?? [])]).map((form) => form.toUpperCase()),
+    );
+
+    for (const term of required) {
+      assert.ok(terms.has(term.toUpperCase()), `glossary is missing ${term}`);
+    }
+  });
+
+  it('only links terms that appear in the lab content', () => {
+    const haystack = topics
+      .flatMap((topic) => [
+        topic.title,
+        topic.summary,
+        ...topic.keyIdeas,
+        ...topic.interviewQuestions,
+        ...topic.snippets.map((snippet) => snippet.label),
+        ...topic.actions.flatMap((action) => [action.label, action.description]),
+      ])
+      .join('\n')
+      .toLowerCase();
+
+    for (const entry of glossary) {
+      if (entry.autoLink === false) continue;
+      const forms = [entry.term, ...(entry.match ?? [])].map((form) => form.toLowerCase());
+      assert.ok(
+        forms.some((form) => haystack.includes(form)),
+        `${entry.term} is never mentioned in the labs, so linking it is noise`,
+      );
     }
   });
 });

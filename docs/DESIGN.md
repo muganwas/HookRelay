@@ -3,10 +3,17 @@
 What the system does, how it fails, and why the pieces are shaped this way.
 Written to be defended in a design review, not to describe the file tree.
 
+If a word here is unfamiliar, the labs have a glossary of every abbreviation and
+short form: **http://localhost:3000/labs** → *Glossary*.
+
 ## Problem
 
 Accept events over HTTP, deliver them to customer endpoints as signed webhooks,
 retry failures, and stay observable and recoverable throughout.
+
+In plain words: someone sends us "this happened". We save it, decide who is
+subscribed, and call their URL with a signature. If the call fails we keep trying
+on a schedule, and we keep a permanent record of what happened either way.
 
 The hard requirements are the ones that shape everything else:
 

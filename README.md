@@ -3,6 +3,15 @@
 Outbound webhook delivery service: accepts events, fans them out to endpoint
 subscriptions, signs each request, and retries failures with backoff.
 
+In plain words: a customer tells us "something happened"; we store it, work out
+who wants to know, and call each of their URLs with a signed message. If a URL is
+down we try again later instead of losing the message.
+
+New to the vocabulary? Every abbreviation used here — TTL, HMAC, ETag, MVCC,
+FK, PK, SLO and the rest — is explained in the built-in glossary at
+**http://localhost:3000/labs** (the *Glossary* button), and the same text appears
+when you hover any dotted-underline word in the labs.
+
 ## Stack
 
 - Node 24, TypeScript (strict, ESM)
@@ -108,6 +117,8 @@ Open **http://localhost:3000/labs** — a study guide covering every topic built
 this repo, with one-click demos that run against the real Postgres and Redis.
 
 - 17 topics, each with key ideas, runnable snippets and an interview drill
+- a **glossary** of every abbreviation and short form (127 entries, grouped and
+  searchable), also shown on hover wherever a term appears in the text
 - 54 one-click demos: constraint probes, migration drift, layer-rule scan, EventEmitter
   semantics, queue retries and dedupe, cron claim race, index before/after, query
   plans, log redaction and stream tail, audit writes, API-key auth, rate limiting,
