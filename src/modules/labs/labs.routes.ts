@@ -14,6 +14,13 @@ export function createLabsRouter(controller: LabsController): Router {
 
   // Deterministic HTTP targets so the queue and webhook demos exercise real
   // network calls instead of mocking the processor.
+  router.all('/api/targets/slow', async (req, res) => {
+    const requested = Number(req.query.ms ?? 1000);
+    const delay = Math.min(5000, Math.max(0, Number.isFinite(requested) ? requested : 1000));
+    await new Promise((resolve) => setTimeout(resolve, delay));
+    res.json({ target: 'lab-slow', delayedMs: delay, ok: true });
+  });
+
   router.all('/api/targets/:code', (req, res) => {
     const requested = Number(req.params.code);
     const allowed = new Set([200, 201, 400, 401, 404, 429, 500, 503]);

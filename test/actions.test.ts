@@ -168,6 +168,29 @@ describe('infra: dependencies answer', () => {
   });
 });
 
+describe('capstone: operational signals', () => {
+  it('reads live system state', async () => {
+    const result = await mustGet('capstone.readout').run({});
+    const labels = tableOf(result).rows.map((row) => String(row[0]));
+
+    assert.ok(labels.includes('workers connected'));
+    assert.ok(labels.includes('queue waiting'));
+    assert.ok(labels.includes('deliveries by status'));
+    assert.ok(labels.includes('pg pool total / idle / waiting'));
+  });
+
+  it('fails fast against a dead redis and maps the failure modes', async () => {
+    const result = await mustGet('capstone.redis-down').run({});
+    const rows = tableOf(result).rows;
+
+    assert.match(result.title, /failed fast|unexpectedly connected/);
+    assert.ok(
+      rows.some((row) => String(row[2]).includes('fails OPEN')),
+      'the matrix must call out fail-open behaviour',
+    );
+  });
+});
+
 describe('logs: structured output', () => {
   it('redacts secrets before writing and drops below-level lines', async () => {
     const result = await mustGet('logs.structured').run({});
