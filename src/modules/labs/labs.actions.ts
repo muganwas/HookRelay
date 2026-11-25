@@ -1,8 +1,9 @@
 import type { ActionDefinition } from './labs.types.js';
 import { dataActions } from './labs.actions.data.js';
+import { eventActions } from './labs.actions.events.js';
 import { runtimeActions } from './labs.actions.runtime.js';
 
-const all: ActionDefinition[] = [...dataActions, ...runtimeActions];
+const all: ActionDefinition[] = [...dataActions, ...eventActions, ...runtimeActions];
 
 const byId = new Map<string, ActionDefinition>();
 

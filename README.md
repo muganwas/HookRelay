@@ -56,10 +56,10 @@ Health check: `GET /v1/health`
 Open **http://localhost:3000/labs** — a study guide covering every topic built in
 this repo, with one-click demos that run against the real Postgres and Redis.
 
-- 13 topics, each with key ideas, runnable snippets and an interview drill
-- 14 demos: constraint probes, migration drift, layer-rule scan, git history,
-  queue retries and dedupe, cron claim race, index before/after, query plans,
-  HMAC verification, ETag revalidation
+- 14 topics, each with key ideas, runnable snippets and an interview drill
+- 27 one-click demos: constraint probes, migration drift, layer-rule scan, EventEmitter
+  semantics, queue retries and dedupe, cron claim race, index before/after, query
+  plans, HMAC verification, ETag revalidation
 - Progress is stored in localStorage
 
 Some demos need the worker running in a second terminal (`npm run worker`).

@@ -55,6 +55,10 @@ services:
       REDIS_URL: redis://redis:6379
     ports:
       - "3000:3000"
+    volumes:
+      # Study convenience: UI edits land without an image rebuild.
+      # Remove this line to serve exactly what the image was built with.
+      - ./public:/app/public:ro
     depends_on:
       postgres:
         condition: service_healthy

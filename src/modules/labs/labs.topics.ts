@@ -1,4 +1,4 @@
-import type { LabTopic } from './labs.types.js';
+﻿import type { LabTopic } from './labs.types.js';
 
 export const topics: LabTopic[] = [
   {
@@ -12,7 +12,7 @@ export const topics: LabTopic[] = [
     keyIdeas: [
       'A named volume outlives the container; `docker compose down -v` is the only honest test of a migration.',
       'A healthcheck in compose is what lets `docker compose ps` say "healthy" instead of just "up".',
-      '`/v1/health` returns 503 and names the failing dependency — it measures, it does not report a cached flag.',
+      '`/v1/health` returns 503 and names the failing dependency â€” it measures, it does not report a cached flag.',
       '`pool.max = 10` is deliberately too small for 4 worker replicas: you will hit it and measure it.',
       '`process.loadEnvFile` is built into Node; the migration CLI needs its own loader because it is a separate process.',
     ],
@@ -84,10 +84,10 @@ export const config = parsed.data;`,
     keyIdeas: [
       '`pg` lives only in `infra/`. A service must be unit-testable with no database.',
       '`express` may appear at runtime only in `*.routes.ts`; controllers import `RequestHandler` as `import type`, which erases at compile time.',
-      'Routes are the HTTP adapter, so importing `Router` there is correct — the rule bans express in services, not in routes.',
+      'Routes are the HTTP adapter, so importing `Router` there is correct â€” the rule bans express in services, not in routes.',
       'The error handler must take four arguments and be registered last; Express detects it by arity.',
       '`createApp()` is a composition root: swap a dependency there and nothing else changes.',
-      '`Promise.allSettled` in the health service, not `Promise.all` — `all` short-circuits and loses the other result.',
+      '`Promise.allSettled` in the health service, not `Promise.all` â€” `all` short-circuits and loses the other result.',
     ],
     interviewQuestions: [
       'Where does a transaction that spans two repositories live, and why not inside a repository?',
@@ -143,8 +143,113 @@ export const config = parsed.data;`,
     ],
   },
   {
-    id: 'schemas',
+    id: 'node-events',
     order: 3,
+    phase: '1b',
+    title: 'Node.js Events (EventEmitter)',
+    status: 'live',
+    summary:
+      "EventEmitter is Node's in-process pub/sub primitive: synchronous, non-durable, and the machinery under our HTTP server, the worker, pg and ioredis.",
+    keyIdeas: [
+      '`emit()` is synchronous. Every listener runs inline before it returns — an `async` listener returns a promise that `emit` does **not** await.',
+      'A rejection inside an async listener is not caught by the emitter. On Node 15+ it becomes an unhandled rejection and terminates the process.',
+      "`'error'` is the one special event: with no listener, `emit('error')` throws. Every other event with no listener is a silent no-op returning `false`.",
+      'Listeners run in registration order; `once()` auto-removes after firing; `prependListener` jumps the queue.',
+      'Node warns at 11 listeners per event. A listener added per request and never removed is the classic leak — fix the leak, not the threshold.',
+      'It is **in-process only**: invisible to other replicas, no retry, lost on crash. That is precisely why delivery work goes through BullMQ instead of `emitter.emit`.',
+      'Four different things get called "events": EventEmitter (in-process, sync), EventTarget (in-process, DOM-style), a message queue (cross-process, durable), and a webhook (cross-company, over HTTP).',
+    ],
+    interviewQuestions: [
+      'Is `emit()` synchronous or asynchronous, and what does that mean for error handling?',
+      "What happens when you emit `'error'` and nobody is listening?",
+      "How does an async listener's rejection surface, and how do you handle it?",
+      'When is EventEmitter the right tool, and when is using it instead of a queue a bug?',
+      'What causes `MaxListenersExceededWarning`, and why is the default 11?',
+      "How is `req.on('data')` related to EventEmitter, and what is backpressure?",
+    ],
+    snippets: [
+      {
+        label: 'emit is synchronous — the async listener is not awaited',
+        language: 'ts',
+        code: `emitter.on('demo', () => trace.push('A'));
+emitter.on('demo', async () => {
+  trace.push('B start');
+  await sleep(15);
+  trace.push('B end');
+});
+
+trace.push('caller: before emit');
+const hadListeners = emitter.emit('demo'); // true
+trace.push('caller: after emit');
+
+// order: before emit, A, B start, after emit, ... B end`,
+      },
+      {
+        label: "'error' throws when unhandled",
+        language: 'ts',
+        code: `const emitter = new EventEmitter();
+
+emitter.emit('nobody-listening');        // false, silently dropped
+emitter.emit('error', new Error('boom')); // throws synchronously
+
+emitter.on('error', (err) => log(err));  // now it is delivered instead
+emitter.emit('error', new Error('handled'));`,
+      },
+      {
+        label: 'captureRejections routes async errors instead of crashing',
+        language: 'ts',
+        code: `const key = Symbol.for('nodejs.rejection');
+const emitter = new EventEmitter({ captureRejections: true });
+
+(emitter as unknown as Record<symbol, (e: unknown) => void>)[key] = (err) => {
+  logger.error({ err }, 'listener failed');
+};
+
+emitter.on('job', async () => {
+  throw new Error('handled by the rejection callback');
+});`,
+      },
+      {
+        label: 'in-process vs durable: why the queue exists',
+        language: 'ts',
+        code: `// in-process: fast, synchronous, lost on crash, invisible to other replicas
+emitter.emit('delivery.created', delivery);
+
+// cross-process: persisted in Redis, retried, observable, survives restarts
+await queue.add('deliver', delivery, { jobId: delivery.id });`,
+      },
+    ],
+    actions: [
+      {
+        id: 'events.order',
+        label: 'Prove emit is synchronous',
+        description: 'Traces listener order and shows the async listener finishing after the caller continues.',
+      },
+      {
+        id: 'events.error',
+        label: "Emit 'error' with and without a listener",
+        description: 'A normal event is dropped silently; an unhandled error event throws out of emit.',
+      },
+      {
+        id: 'events.leak',
+        label: 'Trigger the listener leak warning',
+        description: 'Adds 12 listeners to one event and captures MaxListenersExceededWarning.',
+      },
+      {
+        id: 'events.async-crash',
+        label: 'Crash a child process with an async listener',
+        description: 'Runs the unsafe variant in a separate process, then shows captureRejections fixing it.',
+      },
+      {
+        id: 'events.where-used',
+        label: 'Find EventEmitter in this repo',
+        description: 'Scans app code for .on/.once/.emit and lists the real touchpoints.',
+      },
+    ],
+  },
+  {
+    id: 'schemas',
+    order: 4,
     phase: '2',
     title: 'PostgreSQL Schemas',
     status: 'live',
@@ -152,7 +257,7 @@ export const config = parsed.data;`,
       'Three schemas (app / audit / ops) split by permission and retention. Constraints are the contract; the database enforces it, not the application.',
     keyIdeas: [
       '`unique (tenant_id, idempotency_key)` ignores NULLs by default, so "no key" means "always a new event".',
-      '`timestamptz` stores an 8-byte UTC instant and converts using the session timezone — it stores no timezone text.',
+      '`timestamptz` stores an 8-byte UTC instant and converts using the session timezone â€” it stores no timezone text.',
       '`text` + `CHECK` beats a native enum when the value set evolves: dropping a check is an ordinary migration.',
       'No FK on `audit.audit_log.tenant_id`: audit must outlive its subject.',
       'External ids are UUIDs (unguessable); internal high-volume ids are `bigint` (8 bytes, sequential inserts).',
@@ -215,14 +320,14 @@ values (gen_random_uuid(), $1, 'order.created', '{}', null);`,
   },
   {
     id: 'migrations',
-    order: 4,
+    order: 5,
     phase: '3',
     title: 'Migrations',
     status: 'live',
     summary:
       'The ledger table is what makes a folder of SQL into a versioned schema. Zero-downtime changes are three separate deploys, not one clever statement.',
     keyIdeas: [
-      '`pgmigrations` records which migration ran and when — the schema has a version, not just a shape.',
+      '`pgmigrations` records which migration ran and when â€” the schema has a version, not just a shape.',
       'Expand/contract: add the new column + a sync trigger, backfill, then contract. Three deploys, two of them code-only.',
       '`RENAME COLUMN` takes milliseconds and is still a production incident: old processes keep asking for the old name.',
       '`CREATE INDEX CONCURRENTLY` cannot run inside a transaction, and a failed build leaves an invalid index behind.',
@@ -294,7 +399,7 @@ where d.id = b.id;`,
   },
   {
     id: 'git',
-    order: 5,
+    order: 6,
     phase: '4',
     title: 'Git: branches, PRs, merges',
     status: 'live',
@@ -305,7 +410,7 @@ where d.id = b.id;`,
       '`git log --first-parent` shows trunk history without wading through side branches.',
       '`git log --all` includes tooling refs (agent checkpoints), which can look like corrupt history.',
       'Squash keeps main clean but coarsens `git blame` and `git bisect`.',
-      '`revert` is a new commit; `reset --hard` moves the pointer and erases commits — never on a pushed branch.',
+      '`revert` is a new commit; `reset --hard` moves the pointer and erases commits â€” never on a pushed branch.',
       '`git bisect run <command>` automates the search using any command that exits non-zero on failure.',
     ],
     interviewQuestions: [
@@ -343,14 +448,14 @@ git revert -m 1 <merge-sha>`,
     actions: [
       {
         id: 'git.graph',
-        label: 'Read this repo’s history',
+        label: 'Read this repoâ€™s history',
         description: 'Runs read-only git commands: first-parent graph, branches, working tree status.',
       },
     ],
   },
   {
     id: 'middleware',
-    order: 6,
+    order: 7,
     phase: '5',
     title: 'Middleware',
     status: 'live',
@@ -406,7 +511,7 @@ app.use(errorHandler);                   // 4. must be last, 4 args`,
   },
   {
     id: 'queues',
-    order: 7,
+    order: 8,
     phase: '7',
     title: 'Queues (BullMQ)',
     status: 'live',
@@ -415,13 +520,13 @@ app.use(errorHandler);                   // 4. must be last, 4 args`,
     keyIdeas: [
       'BullMQ gives at-least-once. Exactly-once is impossible, so the consumer must be idempotent.',
       '`jobId = deliveryId` makes enqueueing idempotent: a second add with the same id is ignored.',
-      '4xx is deterministic — retrying a 401 nine times is pure waste. Throw `UnrecoverableError`.',
+      '4xx is deterministic â€” retrying a 401 nine times is pure waste. Throw `UnrecoverableError`.',
       '`failed` fires on every failed attempt; check `job.attemptsMade >= job.opts.attempts` for the terminal state.',
       'Worker connections need `maxRetriesPerRequest: null`; blocking reads must not be capped.',
       'Graceful shutdown (`worker.close()`) waits for in-flight jobs. `process.exit()` leaves them active until the stalled check re-delivers them.',
     ],
     interviewQuestions: [
-      'At-least-once vs exactly-once — which do you get, and what does it force on the consumer?',
+      'At-least-once vs exactly-once â€” which do you get, and what does it force on the consumer?',
       'What failure does `jobId = deliveryId` prevent, and what does it not prevent?',
       'Why exponential backoff, and why add jitter?',
       'What happens to an active job if the worker is killed mid-flight?',
@@ -474,7 +579,7 @@ throw new Error('503 from receiver'); // retryable`,
       {
         id: 'queues.enqueue-400',
         label: 'Enqueue an unrecoverable 4xx',
-        description: 'Adds a job that throws UnrecoverableError — dead on attempt 1.',
+        description: 'Adds a job that throws UnrecoverableError â€” dead on attempt 1.',
       },
       {
         id: 'queues.dedupe',
@@ -490,14 +595,14 @@ throw new Error('503 from receiver'); // retryable`,
   },
   {
     id: 'cron',
-    order: 8,
+    order: 9,
     phase: '8',
     title: 'Cron jobs',
     status: 'live',
     summary:
       'A scheduler decides when; a database claim decides who. The unique (job_name, window_start) constraint makes the claim atomic.',
     keyIdeas: [
-      '`upsertJobScheduler` is safe to call from every replica at boot — it updates instead of duplicating.',
+      '`upsertJobScheduler` is safe to call from every replica at boot â€” it updates instead of duplicating.',
       'Cron patterns in BullMQ are six fields: seconds first. `0 0 6 * * *` is 06:00 daily.',
       '`every: 60_000` is a fixed interval that drifts under load; `pattern` is wall-clock time.',
       'Claim the window before doing the work. If you work first and record second, both replicas work.',
@@ -507,7 +612,7 @@ throw new Error('503 from receiver'); // retryable`,
     interviewQuestions: [
       'Three ways cron in a container breaks with multiple replicas.',
       'Why claim the window before doing the work?',
-      'What is the difference between a scheduler and a lock here — do you need both?',
+      'What is the difference between a scheduler and a lock here â€” do you need both?',
       'What happens if a cron job runs twice concurrently and only writes at the end?',
     ],
     snippets: [
@@ -549,7 +654,7 @@ if (claimed.rowCount === 0) return; // another replica owns this window`,
   },
   {
     id: 'indexes',
-    order: 9,
+    order: 10,
     phase: '11',
     title: 'Indexes',
     status: 'live',
@@ -559,12 +664,12 @@ if (claimed.rowCount === 0) return; // another replica owns this window`,
       'Every index taxes writes and disk. Add one because a query is slow, not because a column is queried.',
       'Composite indexes follow leftmost-prefix: `(a, b)` serves `a` and `a,b`, never `b` alone.',
       'Partial indexes are smaller and hotter: index only the rows the query can match.',
-      'Covering indexes (`INCLUDE`) enable index-only scans — watch `Heap Fetches` to confirm it.',
+      'Covering indexes (`INCLUDE`) enable index-only scans â€” watch `Heap Fetches` to confirm it.',
       'FK columns are not auto-indexed; a cascade without one can full-scan the child per parent.',
       '`pg_stat_user_indexes.idx_scan = 0` is the signal that an index is dead weight.',
     ],
     interviewQuestions: [
-      'Six indexes on one table — what is the write cost?',
+      'Six indexes on one table â€” what is the write cost?',
       'Why does the planner ignore your index on a low-cardinality column?',
       'When is a partial index better than a full one?',
       'Why can a composite index not serve a query on its second column?',
@@ -612,14 +717,14 @@ create index deliveries_sweep_lab
   },
   {
     id: 'query-plans',
-    order: 10,
+    order: 11,
     phase: '12',
     title: 'Query plans',
     status: 'live',
     summary:
       'EXPLAIN ANALYZE BUFFERS is the only honest performance measurement. Compare estimated rows to actual rows to find stale stats.',
     keyIdeas: [
-      '`EXPLAIN` alone is a guess; `ANALYZE` executes and reports reality — never on a write in production without a transaction.',
+      '`EXPLAIN` alone is a guess; `ANALYZE` executes and reports reality â€” never on a write in production without a transaction.',
       'A large gap between `rows=` estimated and actual means stale statistics: run `ANALYZE`.',
       'Seq scan on a big table with a selective filter is the smell. On a small table it is often correct.',
       '`Sort Method: external merge` and `Batches > 1` mean `work_mem` spilled to disk.',
@@ -627,10 +732,10 @@ create index deliveries_sweep_lab
       '`pg_stat_statements` ranks queries by total time, which is where you look first.',
     ],
     interviewQuestions: [
-      '"Slow in prod, fast locally" — name six causes.',
+      '"Slow in prod, fast locally" â€” name six causes.',
       'How do you know a plan is wrong rather than the query?',
       'What does a high `Heap Fetches` count tell you?',
-      'When would you raise `work_mem` — and when is that the wrong fix?',
+      'When would you raise `work_mem` â€” and when is that the wrong fix?',
     ],
     snippets: [
       {
@@ -668,7 +773,7 @@ order by seq_scan desc;`,
   },
   {
     id: 'webhooks',
-    order: 11,
+    order: 12,
     phase: '9',
     title: 'Webhooks',
     status: 'live',
@@ -676,7 +781,7 @@ order by seq_scan desc;`,
       'Sign `timestamp.body` so a captured payload cannot be replayed later. Stable event ids let receivers dedupe.',
     keyIdeas: [
       'Sign `t.body`, not the body alone: otherwise a captured request is valid forever.',
-      'Reject signatures older than ~5 minutes — that is the replay window you accept.',
+      'Reject signatures older than ~5 minutes â€” that is the replay window you accept.',
       'Verify with a constant-time comparison, not `===`.',
       'Classify the response: 2xx success, 429/5xx retry, other 4xx dead.',
       'Send a stable `X-Event-Id` so the receiver can be idempotent.',
@@ -710,12 +815,12 @@ if (!timingSafeEqual(hex(signature), hex(received))) return reject('bad signatur
   },
   {
     id: 'polling',
-    order: 12,
+    order: 13,
     phase: '10',
     title: 'Polling',
     status: 'live',
     summary:
-      'When the consumer cannot accept inbound traffic, poll — but make it cheap with ETag/304 and keep jitter in the retry loop.',
+      'When the consumer cannot accept inbound traffic, poll â€” but make it cheap with ETag/304 and keep jitter in the retry loop.',
     keyIdeas: [
       '`ETag` + `If-None-Match` returns 304 with no body: bandwidth scales with changes, not with polls.',
       'Long-poll holds the request open for a bounded time to cut latency without a socket.',
@@ -756,7 +861,7 @@ const delay = Math.random() * Math.min(cap, base * 2 ** attempt);`,
   },
   {
     id: 'logs',
-    order: 13,
+    order: 14,
     phase: '6',
     title: 'Logs',
     status: 'reference',
@@ -771,7 +876,7 @@ const delay = Math.random() * Math.min(cap, base * 2 ** attempt);`,
       'Audit rows are business records with years of retention; app logs are operational with days.',
     ],
     interviewQuestions: [
-      'Logs vs metrics vs traces — what question does each answer?',
+      'Logs vs metrics vs traces â€” what question does each answer?',
       'Why is Pub/Sub the wrong choice for a log pipeline?',
       'How do you correlate a log line with the HTTP request that caused it?',
       'What do you alert on?',

@@ -155,6 +155,58 @@ describe('infra: dependencies answer', () => {
   });
 });
 
+describe('node events: emitter semantics', () => {
+  it('runs listeners inline and does not await the async one', async () => {
+    const result = await mustGet('events.order').run({});
+    const trace = tableOf(result).rows.map((row) => String(row[1]));
+
+    const afterEmit = trace.findIndex((line) => line.startsWith('caller: after emit'));
+    const asyncEnd = trace.findIndex((line) => line.includes('async listener end'));
+
+    assert.equal(trace[0], 'caller: before emit', 'emit must not run before the caller logs');
+    assert.ok(afterEmit > 0, 'missing "after emit" marker');
+    assert.ok(asyncEnd > afterEmit, 'async listener tail must land after emit returned');
+    assert.match(trace[afterEmit] ?? '', /returned true/);
+  });
+
+  it("throws when 'error' has no listener", async () => {
+    const result = await mustGet('events.error').run({});
+    const rows = tableOf(result).rows;
+
+    assert.equal(rows[0]?.[2], 'no', 'a normal event must not throw');
+    assert.equal(rows[1]?.[2], 'yes', "'error' must throw");
+    assert.match(String(rows[1]?.[3]), /nobody handled/);
+    assert.equal(rows[2]?.[3], 'handler saw this one');
+  });
+
+  it('captures the max-listeners warning', async () => {
+    const result = await mustGet('events.leak').run({});
+    const rows = tableOf(result).rows;
+
+    assert.equal(rows[0]?.[1], 12);
+    assert.equal(rows[2]?.[1], 'MaxListenersExceededWarning');
+    assert.equal(rows[3]?.[1], 0, 'removeAllListeners must clear the leak');
+  });
+
+  it('proves an async listener rejection kills the child process', async () => {
+    const result = await mustGet('events.async-crash').run({});
+    const rows = tableOf(result).rows;
+
+    assert.match(String(rows[0]?.[1]), /exit code 1/);
+    assert.match(String(rows[0]?.[1]), /STILL_ALIVE: no/);
+    assert.equal(rows[2]?.[1], 'captured cleanly', 'captureRejections must route the error');
+  });
+
+  it('finds real EventEmitter usage in app code', async () => {
+    const result = await mustGet('events.where-used').run({});
+    const rows = tableOf(result).rows;
+
+    assert.ok(rows.length > 0, 'expected at least one touchpoint');
+    const files = rows.map((row) => String(row[0]));
+    assert.ok(files.some((file) => file.includes('worker')), 'worker.ts should register listeners');
+  });
+});
+
 describe('git: read-only inspection', () => {
   it('returns branch and status output', async () => {
     const result = await mustGet('git.graph').run({});

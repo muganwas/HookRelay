@@ -51,16 +51,27 @@ function code(text) {
   return el('code', { text });
 }
 
-/** Renders `backtick` segments as inline code without touching innerHTML. */
+/** Renders `code` and **bold** segments without touching innerHTML. */
 function inline(text) {
+  const source = String(text);
   const fragment = document.createDocumentFragment();
-  String(text)
-    .split('`')
-    .forEach((part, index) => {
-      if (!part) return;
-      if (index % 2 === 1) fragment.append(el('code', { class: 'inline', text: part }));
-      else fragment.append(document.createTextNode(part));
-    });
+  const tokenPattern = /(`[^`]+`|\*\*[^*]+\*\*)/g;
+  let cursor = 0;
+
+  for (const match of source.matchAll(tokenPattern)) {
+    const index = match.index ?? 0;
+    if (index > cursor) fragment.append(document.createTextNode(source.slice(cursor, index)));
+
+    const token = match[0];
+    if (token.startsWith('`')) {
+      fragment.append(el('code', { class: 'inline', text: token.slice(1, -1) }));
+    } else {
+      fragment.append(el('strong', { text: token.slice(2, -2) }));
+    }
+    cursor = index + token.length;
+  }
+
+  if (cursor < source.length) fragment.append(document.createTextNode(source.slice(cursor)));
   return fragment;
 }
 
@@ -480,6 +491,14 @@ async function boot() {
 
   const fromHash = location.hash.replace(/^#\//, '');
   const initial = state.topics.some((t) => t.id === fromHash) ? fromHash : state.topics[0]?.id;
+
+  // Deep links (#/queues) must work without a reload.
+  window.addEventListener('hashchange', () => {
+    const id = location.hash.replace(/^#\//, '');
+    if (!id || id === state.currentId) return;
+    if (!state.topics.some((t) => t.id === id)) return;
+    selectTopic(id, false);
+  });
 
   selectTopic(initial, false);
   renderProgress();
