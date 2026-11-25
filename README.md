@@ -9,6 +9,38 @@ subscriptions, signs each request, and retries failures with backoff.
 - Express 5
 - PostgreSQL 17 (node-postgres, hand-written SQL) — migrations via node-pg-migrate
 
+## Branching model
+
+`main` is the released branch. `development` is the integration branch. Nothing
+lands on `main` except through a pull request from `development`.
+
+    main            ← only via PR from development
+      └── development        ← integration; all work lands here first
+            ├── feat/…       ← one short-lived branch per change
+            ├── fix/…
+            └── chore/…
+
+Workflow for every change:
+
+    git switch development
+    git pull --ff-only
+    git switch -c feat/short-description
+
+    # ...commits...
+
+    git switch development
+    git merge --no-ff feat/short-description
+    git push origin development
+
+Then open a PR from `development` into `main`. `--no-ff` keeps the feature
+visible as a bubble in history, so `git log --first-parent development` shows
+one line per change instead of every intermediate commit.
+
+Two rules that matter:
+
+- Never commit directly to `main`, and never force-push either shared branch.
+- `development` must stay green: run `npm test` before merging into it.
+
 ## Run with Docker (recommended)
 
     docker compose up -d --build
